@@ -1,0 +1,4 @@
+local/
+local-docs/
+.cursor/
+mkdocs.yml
