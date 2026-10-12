@@ -1,0 +1,156 @@
+/* ============================================================
+   dupont — chess-themed styling for the docs site.
+   Board palette from the project screenshot: muted purple dark
+   squares, warm cream light squares, on a dark frame.
+   ============================================================ */
+
+:root {
+  --chess-dark-square: #7a74c4;   /* purple board square */
+  --chess-light-square: #ecece4;  /* warm cream board square */
+  --chess-accent: #8b84e4;        /* brighter purple accent */
+  --chess-accent-soft: #b4afe8;   /* lighter purple for hover/links */
+  --chess-ink: #15131f;           /* near-black board frame */
+}
+
+/* Force a single dark scheme (do not follow the OS setting). */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #211d33;
+  --md-primary-fg-color--light: #2d2846;
+  --md-primary-fg-color--dark: #15131f;
+  --md-accent-fg-color: var(--chess-accent);
+  --md-default-bg-color: #141220;
+  --md-typeset-a-color: var(--chess-accent-soft);
+}
+
+/* ---- Backstop: hide the per-page (right-hand) table of contents.
+   The left navigation is the only index. ---- */
+.md-sidebar--secondary,
+.md-nav--secondary {
+  display: none !important;
+}
+
+/* ---- Larger, more readable text across the whole site. ---- */
+.md-typeset {
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+/* Scale the base rem up too, so spacing and all relative sizes grow with it. */
+@media screen and (min-width: 76.25em) {
+  html {
+    font-size: 130%;
+  }
+}
+
+html {
+  font-size: 122%;
+}
+
+.md-nav {
+  font-size: 0.8rem;
+}
+
+/* Headings a touch larger than the scaled defaults. */
+.md-typeset h1 {
+  font-size: 2.1rem;
+}
+
+.md-typeset h2 {
+  font-size: 1.55rem;
+}
+
+.md-typeset h3 {
+  font-size: 1.2rem;
+}
+
+/* Larger table and code text. */
+.md-typeset table:not([class]) {
+  font-size: 0.9rem;
+}
+
+.md-typeset code {
+  font-size: 0.86em;
+}
+
+/* ---- Header: a thin board-pattern strip under the top bar, so the
+   whole site reads as "chess" at a glance. ---- */
+.md-header {
+  box-shadow: 0 2px 0 0 var(--chess-accent);
+}
+
+.md-header::after {
+  content: "";
+  display: block;
+  height: 6px;
+  background-image:
+    linear-gradient(45deg, var(--chess-dark-square) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--chess-dark-square) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--chess-dark-square) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--chess-dark-square) 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+  background-color: var(--chess-light-square);
+  opacity: 0.9;
+}
+
+/* ---- Page titles: purple underline, like a highlighted square. ---- */
+.md-typeset h1 {
+  color: #eceaf6;
+  border-bottom: 2px solid var(--chess-accent);
+  padding-bottom: 0.3rem;
+}
+
+.md-typeset h2 {
+  color: #d6d2f0;
+}
+
+.md-typeset h3 {
+  color: #c3bde8;
+}
+
+/* ---- Tables styled like a board frame. ---- */
+.md-typeset table:not([class]) {
+  border: 1px solid #3a3458;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.md-typeset table:not([class]) th {
+  background-color: var(--chess-dark-square);
+  color: #f6f6fb;
+  font-weight: 600;
+}
+
+.md-typeset table:not([class]) tr:nth-child(even) {
+  background-color: rgba(122, 116, 196, 0.12);
+}
+
+/* ---- Inline code and code blocks: purple on dark. ---- */
+.md-typeset code {
+  color: var(--chess-accent-soft);
+  background-color: rgba(139, 132, 228, 0.12);
+}
+
+/* ---- Links hover in brighter purple, like selecting a move. ---- */
+.md-typeset a:hover {
+  color: var(--chess-accent);
+}
+
+/* ---- Mermaid diagrams: center them, give room, and scale them up so
+   they are easy to read. ---- */
+.md-typeset .mermaid {
+  display: flex;
+  justify-content: center;
+  margin: 1.6rem 0;
+}
+
+.md-typeset .mermaid svg {
+  width: 100% !important;
+  max-width: 920px !important;
+  height: auto !important;
+}
+
+/* ---- Admonitions picked up the accent too. ---- */
+.md-typeset .admonition {
+  border-left-color: var(--chess-accent);
+}

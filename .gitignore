@@ -1,4 +1,10 @@
 local/
 local-docs/
 .cursor/
+.kiro/
 mkdocs.yml
+site/
+.venv/
+.env
+__pycache__/
+*.py[cod]

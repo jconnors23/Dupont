@@ -1,0 +1,121 @@
+name: Deploy docs to GitHub Pages
+
+# Builds the MkDocs site and publishes it to GitHub Pages on every push to main.
+# The site content lives in docs/. The mkdocs.yml config is intentionally kept out
+# of the repository (it is a local working artifact), so this workflow writes a
+# build-time copy of it on the runner before building.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; a newer push cancels an in-progress run.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install MkDocs and the Material theme
+        run: pip install "mkdocs==1.6.1" "mkdocs-material==9.7.7"
+
+      - name: Write the build-time mkdocs.yml
+        # mkdocs.yml is gitignored, so recreate it here. Keep this in sync with
+        # the local copy in the project root.
+        run: |
+          cat > mkdocs.yml <<'YAML'
+          site_name: Dupont
+          site_description: A natural-language adapter for the Stockfish chess engine. Ask about a chess game in plain English and get answers grounded in the engine, not hallucinated. Local prototype, individual use.
+          site_url: https://jconnors23.github.io/dupont/
+
+          theme:
+            name: material
+            icon:
+              logo: material/chess-knight
+              repo: fontawesome/brands/github
+            favicon: assets/favicon.svg
+            font:
+              text: Inter
+              code: JetBrains Mono
+            palette:
+              scheme: slate
+              primary: deep purple
+              accent: deep purple
+            features:
+              - navigation.sections
+              - navigation.top
+              - navigation.instant
+              - navigation.tracking
+              - content.code.copy
+              - content.code.annotate
+
+          repo_url: https://github.com/jconnors23/dupont
+          repo_name: jconnors23/dupont
+          edit_uri: ""
+
+          markdown_extensions:
+            - admonition
+            - tables
+            - attr_list
+            - md_in_html
+            - toc:
+                permalink: true
+            - pymdownx.highlight:
+                anchor_linenums: true
+            - pymdownx.inlinehilite
+            - pymdownx.emoji:
+                emoji_index: !!python/name:material.extensions.emoji.twemoji
+                emoji_generator: !!python/name:material.extensions.emoji.to_svg
+            - pymdownx.superfences:
+                custom_fences:
+                  - name: mermaid
+                    class: mermaid
+                    format: !!python/name:pymdownx.superfences.fence_code_format
+
+          extra_css:
+            - stylesheets/extra.css
+
+          nav:
+            - Overview: index.md
+            - How It Works: architecture.md
+            - Dual-Engine Design: architecture/design.md
+            - Local Setup: how-to-run.md
+            - Commands Reference: using-the-coach.md
+            - Status & Roadmap: conclusions.md
+            - Glossary: glossary.md
+          YAML
+
+      - name: Build the site
+        run: mkdocs build --strict
+
+      - name: Upload the built site as a Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
