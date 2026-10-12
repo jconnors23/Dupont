@@ -61,13 +61,14 @@ ollama serve
 Run a game:
 
 ```bash
-python cli.py tests/sample_game.pgn
+python -m dupont.cli tests/sample_game.pgn
 ```
 
-Run the tests (uses Python's built-in `unittest`):
+Run the tests (uses `pytest` and `hypothesis`):
 
 ```bash
-python -m unittest tests.test_chess_coach -v
+pytest -v
+# or: python run_tests.py
 ```
 
 This project targets Python 3.11+ (developed on 3.13). Full setup details are in the documentation linked below.
@@ -75,18 +76,22 @@ This project targets Python 3.11+ (developed on 3.13). Full setup details are in
 ## Project Layout
 
 ```text
-dupont/
-├── cli.py                     # Interactive terminal loop: board, commands, questions
-├── core/
+dupont/                        # workspace root
+├── dupont/                    # the application package
+│   ├── __init__.py
+│   ├── cli.py                 # Interactive terminal loop: navigation, commands, questions
 │   ├── config.py              # Reads engine path and model settings from .env
 │   ├── engine.py              # Stockfish wrapper: analysis and move refutation
-│   └── game_state.py          # PGN parsing and move navigation
-├── agent/
-│   └── coach.py               # Sends engine facts + question to the language model
+│   ├── game_state.py          # PGN parsing and move navigation
+│   ├── pgn_cleaner.py         # Strips PGN headers so a game starts at move 1
+│   └── coach.py               # LLM client: turns engine facts into plain-language coaching
 ├── tests/
-│   ├── test_chess_coach.py    # unittest suite (navigation, engine, coach)
+│   ├── test_chess_coach.py    # Test suite (pytest, unittest.mock, Hypothesis)
 │   └── sample_game.pgn        # The 1858 Opera Game
+├── games/                     # Sample PGNs for review
 ├── docs/                      # Documentation site source (MkDocs)
+├── run_tests.py               # Runs the test suite without extra flags
+├── pytest.ini                 # Test configuration
 ├── requirements.txt
 └── .env.example               # Copy to .env and adjust paths
 ```
@@ -98,6 +103,7 @@ dupont/
 | [Overview](./docs/index.md) | What Dupont is and what it can do today |
 | [How It Works](./docs/architecture.md) | The parts, how they talk, and why the coach cannot make up chess |
 | [Dual-Engine Design](./docs/architecture/design.md) | Planned Stockfish + Lc0 layer and the target local hardware |
+| [Design Rationale](./docs/design-rationale.md) | Why the project is built this way — a running decision log |
 | [Local Setup](./docs/how-to-run.md) | Setting it up on your own machine |
 | [Commands Reference](./docs/using-the-coach.md) | The interactive commands and output format |
 | [Status & Roadmap](./docs/conclusions.md) | Prototype status, constraints, and what's planned |

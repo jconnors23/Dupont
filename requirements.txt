@@ -3,3 +3,6 @@ pydantic
 python-dotenv
 openai
 rich
+pytest
+hypothesis
+

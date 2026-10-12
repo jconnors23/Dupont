@@ -95,6 +95,7 @@ jobs:
             - Overview: index.md
             - How It Works: architecture.md
             - Dual-Engine Design: architecture/design.md
+            - Design Rationale: design-rationale.md
             - Local Setup: how-to-run.md
             - Commands Reference: using-the-coach.md
             - Status & Roadmap: conclusions.md

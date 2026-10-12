@@ -34,7 +34,7 @@ A second engine is planned behind the same adapter: **Leela Chess Zero (Lc0)**, 
 
 ## What It Can Do Today
 
-- Load any PGN game and step through it move by move, or jump straight to a move number.
+- Load any PGN game and step through it one key at a time (`f` forward, `b` back, or the arrow keys), or jump straight to a move number.
 - See the engine's top candidate moves and its score for the current position.
 - Ask "why not this move?" for any legal move and get the engine's refutation, then a plain-language explanation of it.
 - Ask free-form questions about the position and get an answer grounded in the engine's analysis.
@@ -68,6 +68,7 @@ The engine always runs first and produces the facts. The coach only ever sees th
 | :--- | :--- |
 | Understand how the parts are wired together | [How It Works](./architecture.md) |
 | See the planned two-engine design and target hardware | [Dual-Engine Design](./architecture/design.md) |
+| Understand why the project is built this way | [Design Rationale](./design-rationale.md) |
 | Set it up on your own machine | [Local Setup](./how-to-run.md) |
 | Look up the commands and output format | [Commands Reference](./using-the-coach.md) |
 | See the prototype status and what's planned | [Status & Roadmap](./conclusions.md) |

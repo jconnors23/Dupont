@@ -1,45 +1,38 @@
-"""agent/coach.py - Conversational Grandmaster Coach Agent.
+"""coach/client.py - LLM client that turns engine facts into plain-language coaching.
 
 ==============================================================================
-END-TO-END FLOW & PURPOSE:
+PURPOSE
 ==============================================================================
-This module translates cold, numeric engine outputs (such as "+3.20 cp" or
-"14... Qe6 15. Bxd7+ Nxd7 16. Qb8+") into intuitive, human-understandable chess
-wisdom (explaining motifs like pins, overloaded pieces, and king safety).
+This module is the language layer of the Stockfish adapter. It takes the engine's
+numeric output (such as a "+3.20" evaluation or the line "14... Qe6 15. Bxd7+ Nxd7
+16. Qb8+") and asks a local language model to put it into plain words, naming the
+ideas behind it (pins, overloaded pieces, king safety, and the like).
 
-The end-to-end flow of an interaction:
-1. INPUT: The user asks a conversational question in the REPL CLI (e.g.,
-   "Why is this move a mistake?" or "Why couldn't I play Nxd5 here?").
-2. FACT INJECTION: Before the question is sent to the LLM, the CLI queries
-   `core.engine.StockfishEngine` to compute ground-truth facts:
-   - Position FEN and whose turn it is.
-   - The move played in the actual game.
-   - The candidate move analyzed and its classification (Blunder, Mistake, etc.).
-   - The exact numerical eval drop (delta).
-   - The engine's theoretical best move.
-   - The opponent's concrete tactical refutation and continuation line.
-3. CONTEXT AUGMENTATION: `_format_engine_facts()` builds an unambiguous structured
-   facts block `[DETERMINISTIC ENGINE FACTS]` and prepends it to the user's prompt.
-4. INFERENCE: The augmented prompt is appended to the session message history
-   and dispatched via `openai.OpenAI` client to the model (e.g., Ollama's `llama3.1:8b`).
-5. SYSTEM PROMPT CONSTRAINTS: The system prompt strictly prohibits the LLM from
-   inventing piece coordinates or calculating moves independently. It is instructed
-   solely to translate the provided engine facts into pedagogical concepts.
-6. RESILIENCE & OFFLINE FALLBACK: If the local LLM server is offline or unreachable,
-   an exception is caught gracefully and a clean deterministic markdown summary
-   is generated, guaranteeing that the user is never left without analysis.
+The flow of one interaction:
+1. The user asks a question in the CLI (e.g. "Why is this a mistake?").
+2. The CLI uses `core.engine.StockfishEngine` to compute the facts for the position:
+   the FEN and side to move, the move played, any candidate move and its
+   classification, the evaluation and the delta, the engine's best move, and the
+   opponent's refutation line.
+3. `_format_engine_facts()` turns that dictionary into a labeled text block and
+   prepends it to the question.
+4. The combined message is sent through the `openai.OpenAI` client to the configured
+   model (by default, Ollama's `llama3.1:8b`).
+5. The system prompt tells the model to explain only the supplied facts and never to
+   calculate moves or invent coordinates on its own.
+6. If the model server is unreachable, the error is caught and a plain summary of the
+   engine facts is returned instead, so the user still gets the analysis.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any, Optional
 
 import openai
 from openai import OpenAI
 
-from core.config import config
+from dupont.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -93,12 +86,10 @@ class ChessCoach:
         self.history = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     def _format_engine_facts(self, facts: dict[str, Any]) -> str:
-        """Formats the structured engine dictionary into an unambiguous prompt section.
+        """Formats the engine-fact dictionary into a labeled text block for the prompt.
 
-        CS Concept: Grounding / Few-Shot Context Injection.
-        By converting dictionary key-values into clearly labeled text blocks,
-        the LLM's attention mechanism easily focuses on verified facts when generating
-        the answer.
+        Turning the key/values into clearly labeled lines gives the model the exact
+        position and evaluation to explain, so it does not have to infer them.
         """
         lines: list[str] = ["[DETERMINISTIC ENGINE FACTS]"]
 
@@ -140,12 +131,18 @@ class ChessCoach:
 
         return "\n".join(lines)
 
-    def chat(self, user_query: str, engine_facts: dict[str, Any]) -> str:
+    def chat(
+        self,
+        user_query: str,
+        engine_facts: dict[str, Any],
+        system_prompt: Optional[str] = None,
+    ) -> str:
         """Sends user query accompanied by structured engine facts to the LLM coach.
 
         Parameters:
             user_query: The student's natural language question.
             engine_facts: Dictionary of Stockfish calculations and evaluations.
+            system_prompt: Optional override for the system prompt instruction.
 
         Returns:
             The Grandmaster coach's explanation in Markdown.
@@ -154,32 +151,42 @@ class ChessCoach:
         facts_block = self._format_engine_facts(engine_facts)
         user_message_content = f"{facts_block}\n\n[STUDENT QUESTION]\n{user_query.strip()}"
 
-        # Step 2: Append to conversational history
-        self.history.append({"role": "user", "content": user_message_content})
+        # If a specific system_prompt is provided (e.g. for /eval or /eval-long),
+        # use it for this query; otherwise use the standard conversation history.
+        if system_prompt:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message_content},
+            ]
+        else:
+            self.history.append({"role": "user", "content": user_message_content})
+            messages = self.history
 
-        # Step 3: Call LLM API with low temperature (0.3) for factual rigor
+        # Step 2: Call LLM API with low temperature (0.3) for factual rigor
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=self.history,
+                messages=messages,
                 temperature=0.3,
             )
             coach_reply = response.choices[0].message.content or ""
-            # Step 4: Record assistant response in history for future turns
-            self.history.append({"role": "assistant", "content": coach_reply})
+            if not system_prompt:
+                self.history.append({"role": "assistant", "content": coach_reply})
             return coach_reply
 
         except (openai.APIConnectionError, openai.APIError) as err:
             # Handle network errors or offline LLM server gracefully
             logger.warning("LLM API call failed: %s", err)
             fallback = self._generate_offline_coaching_summary(user_query, engine_facts, str(err))
-            self.history.append({"role": "assistant", "content": fallback})
+            if not system_prompt:
+                self.history.append({"role": "assistant", "content": fallback})
             return fallback
 
         except Exception as err:
             logger.error("Unexpected error during LLM chat: %s", err)
             fallback = self._generate_offline_coaching_summary(user_query, engine_facts, str(err))
-            self.history.append({"role": "assistant", "content": fallback})
+            if not system_prompt:
+                self.history.append({"role": "assistant", "content": fallback})
             return fallback
 
     def _generate_offline_coaching_summary(
@@ -201,10 +208,16 @@ class ChessCoach:
             lines.append(
                 f"### Analysis for Move: **{facts['candidate_san']}** ({facts.get('classification', 'Evaluated')})"
             )
-            lines.append(f"- **Evaluation Delta:** `{facts.get('eval_delta_display', 'N/A')}`")
-            lines.append(
-                f"- **Stockfish Best Move:** `{facts.get('best_move_san', 'N/A')}` (Eval: `{facts.get('best_eval_white', 'N/A')}`)"
-            )
+            if "score_display" in facts:
+                lines.append(f"- **Evaluation:** `{facts['score_display']}`")
+            if "eval_delta_display" in facts:
+                lines.append(f"- **Evaluation Delta:** `{facts.get('eval_delta_display', 'N/A')}`")
+            if "best_move_san" in facts and facts["best_move_san"] != facts["candidate_san"]:
+                lines.append(
+                    f"- **Stockfish Best Move:** `{facts.get('best_move_san', 'N/A')}` (Eval: `{facts.get('best_eval_white', 'N/A')}`)"
+                )
+            if "continuation" in facts:
+                lines.append(f"- **Continuation:** `{facts['continuation']}`")
             if facts.get("punishing_move_san"):
                 lines.append(
                     f"- **Punishing Refutation:** `{facts['punishing_move_san']}`"

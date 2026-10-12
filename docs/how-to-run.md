@@ -71,17 +71,23 @@ Skip this step if you only want the engine analysis; the coach will fall back to
 Point the program at a PGN file. A sample game is included:
 
 ```bash
-python cli.py tests/sample_game.pgn
+python -m dupont.cli tests/sample_game.pgn
 ```
 
 That opens the interactive session on the first move. From there, type a command or a question. The [Commands Reference](./using-the-coach.md) page lists everything you can type.
 
 ## Running The Tests
 
-The tests use Python's built-in `unittest`, so there is nothing extra to install. They cover the game navigation, the move-address parsing (including the `m7-w` form and the hop-and-ask prefix), the engine wrapper (including finding a forced mate as a refutation), and the coach's online and offline behavior. The engine tests need Stockfish installed.
+The tests are written in `pytest`, using `unittest.mock.MagicMock` for isolating network calls and `hypothesis` for generative property-based testing. They cover game navigation, move-address parsing (including the `/jump 7-w` form and the hop-and-ask prefix), the engine wrapper (including finding a forced mate as a refutation), the coach's online and offline behavior, the PGN cleaner, and the CLI's position-summary formatting. The engine and `/eval` tests need Stockfish installed; the coaching tests use a local model when one is reachable and otherwise exercise the offline fallback.
 
 ```bash
-python -m unittest tests.test_chess_coach -v
+pytest
 ```
 
-All fifteen tests pass on a setup with Python 3.13 and Stockfish installed.
+Or run via the test runner script:
+
+```bash
+python run_tests.py
+```
+
+All 31 tests pass on a setup with Python 3.13 and Stockfish installed.

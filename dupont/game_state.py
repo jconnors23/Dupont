@@ -179,10 +179,14 @@ class GameState:
         When a student jumps to Move 14w to ask 'Why was my move a mistake?' or
         'Why couldn't I play Nxd5 here?', they want to evaluate the position at
         the moment the decision had to be made (before the move was played).
+        When the timeline pointer reaches the very end of the game (index == total_plies),
+        we reconstruct the final terminal board state using the last ply's fen_after.
         """
         current = self.current_ply
         if current:
             return chess.Board(current.fen_before)
+        if self.plies and self.current_ply_index == len(self.plies):
+            return chess.Board(self.plies[-1].fen_after)
         return chess.Board()
 
     def jump_to_move(self, move_num: int, is_white: bool = True) -> chess.Board:
@@ -215,16 +219,16 @@ class GameState:
         """Jumps directly to a 0-indexed ply in the timeline."""
         if not self.plies:
             raise ValueError("No plies in game.")
-        if ply_index < 0 or ply_index >= len(self.plies):
+        if ply_index < 0 or ply_index > len(self.plies):
             raise IndexError(
-                f"Ply index {ply_index} out of range (0 to {len(self.plies) - 1})."
+                f"Ply index {ply_index} out of range (0 to {len(self.plies)})."
             )
         self.current_ply_index = ply_index
         return self.current_board
 
     def next_ply(self) -> Optional[chess.Board]:
         """Steps forward one ply in the timeline (like pressing Right Arrow on Chess.com)."""
-        if self.current_ply_index + 1 < len(self.plies):
+        if self.current_ply_index + 1 <= len(self.plies):
             self.current_ply_index += 1
             return self.current_board
         return None
@@ -238,23 +242,22 @@ class GameState:
 
     @staticmethod
     def parse_move_specifier(spec: str) -> tuple[int, bool]:
-        r"""Parses a user move string like '/m 7-w', '/m-7-w', 'm7-w', 'm7-b', '7-w', '7-b', '14', '14w', '14b' into (move_num, is_white).
+        r"""Parses a user move string like '/jump 7-w', '/jump 8-b', 'jump 7-w', '7-w', '7-b', '14', '14w', '14b' into (move_num, is_white).
 
-        Supported Chess.com review formats:
-        - '/m 7-w', '/m-7-w', '/m7-w', '/m 7-b', '/m7-b' (slash command format)
-        - 'm7-w', 'm7-b', 'm14-w', 'm14-b' (primary format from eval tool)
-        - 'm7w', 'm7b', 'm 7-w', 'm 7-b', 'm 7'
+        Supported review move formats:
+        - '/jump 7-w', '/jump 8-b', 'jump 7-w' (primary jump command format)
+        - '/m 7-w', 'm7-w', 'm7-b', 'm14-w' (legacy alias)
         - '7-w', '7-b', '7w', '7b', '7'
         - Defaults to White (True) if no color is specified.
         """
         cleaned = spec.strip().lower()
         match = re.match(
-            r"^(?:/?(?:m|move)\s*[-_ ]?(\d+)(?:[-_ ]?([wb]))?|(\d+)[-_ ]?([wb])?)$",
+            r"^(?:/?(?:m|move|jump)\s*[-_ ]?(\d+)(?:[-_ ]?([wb]))?|(\d+)[-_ ]?([wb])?)$",
             cleaned,
         )
         if not match:
             raise ValueError(
-                f"Invalid move specifier: '{spec}'. Use format like '/m 7-w', 'm7-w', 'm7-b', '14w', or '14b'."
+                f"Invalid move specifier: '{spec}'. Use format like '/jump 7-w', '7-w', '7-b', '14w', or '14b'."
             )
 
         num_str = match.group(1) or match.group(3)
@@ -267,9 +270,9 @@ class GameState:
     def parse_move_prefix_and_query(
         input_str: str,
     ) -> tuple[Optional[int], Optional[bool], str]:
-        r"""Detects whether a student prompt begins with a move specifier (e.g. '/m 7-w, why is going to h3 suboptimal').
+        r"""Detects whether a student prompt begins with a move specifier (e.g. '/jump 7-w, why is going to h3 suboptimal').
 
-        Supports both '/m 7-w', '/m-7-w', '/m7-w' and 'm7-w' prefixes.
+        Supports '/jump 7-w', 'jump 7-w', '/m 7-w', 'm7-w', '7-w' prefixes.
 
         Returns:
             (move_num, is_white, remaining_query) if a move prefix was found;
@@ -277,7 +280,7 @@ class GameState:
         """
         raw = input_str.strip()
         match = re.match(
-            r"^(?:/?(?:m|move)\s*[-_ ]?(\d+)(?:[-_ ]?([wb]))?|(\d+)[-_ ]?([wb]))\b\s*[,:]?\s*(.*)$",
+            r"^(?:/?(?:m|move|jump)\s*[-_ ]?(\d+)(?:[-_ ]?([wb]))?|(\d+)[-_ ]?([wb]))\b\s*[,:]?\s*(.*)$",
             raw,
             re.IGNORECASE,
         )

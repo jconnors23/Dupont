@@ -5,17 +5,18 @@ hide:
 
 # How It Works
 
-Dupont is a natural-language adapter for Stockfish: the engine does the chess, and a language model only translates its output into words. The program is a single interactive terminal session built from four parts. Each part has one job, and they are kept apart on purpose so the exact chess calculation never gets mixed up with the plain-language translating.
+Dupont is a natural-language adapter for Stockfish: the engine does the chess, and a language model only translates its output into words. The program is a single interactive terminal session built from a few small parts. Each part has one job, and they are kept apart on purpose so the exact chess calculation never gets mixed up with the plain-language translating.
 
-## The Four Parts
+## The Parts
 
 | Part | File | What it does |
 | :--- | :--- | :--- |
-| Game navigation | `core/game_state.py` | Reads the PGN, splits it into individual half-moves, and tracks where you are in the game. |
-| Chess engine | `core/engine.py` | Wraps Stockfish. Scores positions, lists top moves, and works out why a move fails. |
-| Coach | `agent/coach.py` | Sends the engine's facts and your question to the language model and returns its reply. |
-| Terminal app | `cli.py` | The command loop you type into. Draws the board, reads your commands, and calls the other three. |
-| Settings | `core/config.py` | Reads the engine path and model settings from your environment or a `.env` file. |
+| Game navigation | `dupont/game_state.py` | Reads the PGN, splits it into individual half-moves, and tracks where you are in the game. |
+| Chess engine | `dupont/engine.py` | Wraps Stockfish. Scores positions, lists top moves, and works out why a move fails. |
+| Coach | `dupont/coach.py` | Sends the engine's facts and your question to the language model and returns its reply. |
+| Terminal app | `dupont/cli.py` | The command loop you type into. Draws the board, reads your commands, and calls the other three. |
+| PGN cleaner | `dupont/pgn_cleaner.py` | Strips header tags so a loaded game starts at move 1. |
+| Settings | `dupont/config.py` | Reads the engine path and model settings from your environment or a `.env` file. |
 
 A half-move (one side playing once) is called a *ply*. A full move number like "14" covers White's 14th move and Black's reply, so the program tracks position by ply and lets you ask for either side of a move number.
 
@@ -48,7 +49,7 @@ If the question names a specific move, the app also asks the engine to refute th
 
 ## What The Engine Produces
 
-The engine wrapper (`core/engine.py`) exposes two things the rest of the program relies on.
+The engine wrapper (`dupont/engine.py`) exposes two things the rest of the program relies on.
 
 **Position analysis** returns the top candidate moves, each with a score from White's point of view, and the line of play the engine expects to follow. The wrapper can return several lines; the `/eval` command asks for the top two. Scores are shown in pawns (for example `+1.25` means White is ahead by a little over a pawn) or as a forced mate (for example `#+3` means mate in three for the side to move).
 

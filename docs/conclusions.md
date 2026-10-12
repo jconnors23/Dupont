@@ -21,11 +21,11 @@ The phases and tables below use three markers:
 
 The groundwork was built in a single session: the full working skeleton of the tool and its documentation. This phase is complete.
 
-- ✅ Core modules: PGN loading and move navigation (`core/game_state.py`), the Stockfish engine wrapper (`core/engine.py`), the coach adapter (`agent/coach.py`), and settings (`core/config.py`).
-- ✅ Interactive terminal REPL (`cli.py`) with slash commands: move hop, ask, refute, evaluate, step, board, reset, and quit.
+- ✅ One source package `dupont/`: move navigation (`game_state.py`), the Stockfish engine wrapper (`engine.py`), the coaching LLM client (`coach.py`), the PGN cleaner (`pgn_cleaner.py`), settings (`config.py`), and the CLI (`cli.py`).
+- ✅ Interactive terminal REPL (`dupont/cli.py`): single-key stepping (`f`/`b` and arrow keys) plus slash commands — `/jump` to a move, three evaluation depths (`/eval-short`, `/eval`, `/eval-long`), refute, ask, board, reset, and quit.
 - ✅ The anti-hallucination design: the coach only ever receives engine facts, never calculates chess itself.
 - ✅ Offline fallback that prints engine facts when no language model is running.
-- ✅ Test suite (15 tests, passing) covering navigation, move-address parsing, the engine wrapper, and the coach.
+- ✅ Test suite (31 tests with pytest, MagicMock, and Hypothesis) covering navigation, move-address parsing, the engine wrapper, the coach, the PGN cleaner, and the CLI summary formatting.
 - ✅ Documentation site (this set), themed, with the dual-engine design and a glossary, plus the GitHub Pages workflow.
 
 ### 🟡 Phase 1 — Prototype testing and debugging (next)

@@ -91,7 +91,7 @@ The product is local-first: it is built to run offline with no per-request cost.
 
 ### How A Profile Is Selected
 
-The same program is meant to run under either profile without code changes. The engine paths and the model endpoint are read from the environment (see `core/config.py` and the `.env` file), so moving between the workstation and the laptop is a matter of configuration. This environment-driven selection is implemented today for Stockfish and the model endpoint; the Lc0 backend selection is part of the planned work.
+The same program is meant to run under either profile without code changes. The engine paths and the model endpoint are read from the environment (see `dupont/config.py` and the `.env` file), so moving between the workstation and the laptop is a matter of configuration. This environment-driven selection is implemented today for Stockfish and the model endpoint; the Lc0 backend selection is part of the planned work.
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':65,'rankSpacing':80,'padding':16}}}%%

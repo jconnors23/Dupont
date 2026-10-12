@@ -13,16 +13,17 @@ Plain-language definitions of the terms used across these docs — both the ches
 : The standard text format a chess game is saved in. It lists the moves and some header information (players, date, result). Dupont reads a PGN file as its input.
 
 **Ply (half-move)**
-: One turn by one player. White playing and Black replying is two plies. "Move 14" as a number covers both of White's and Black's 14th, so Dupont addresses a single ply as `m14-w` or `m14-b`.
+: One turn by one player — the smallest unit of game progress. White playing and Black replying is two plies, which together make one numbered "move." Because a bare move number like "14" is ambiguous (White's 14th or Black's?), Dupont addresses a single ply by number *and* color, as `14-w` or `14-b` (White's 14th / Black's 14th). Internally the whole game is stored as an ordered list of plies, and the current position is just an index into that list.
 
 **SAN (Standard Algebraic Notation)**
-: The common way moves are written, like `Nf3` or `O-O`. It names the piece and where it goes.
+: The common, human-facing way moves are written. It names the piece and the destination, with symbols for captures, check, and so on: `Nf3` (knight to f3), `exd5` (pawn on the e-file captures on d5), `O-O` (kingside castling), `Qxb8+` (queen captures on b8 with check), `Rd8#` (rook to d8, checkmate). It is what you see in a PGN and in Dupont's output. Dupont accepts SAN loosely — a lowercase piece letter, a trailing `!`/`?`, or `0-0` for castling are all tolerated.
 
 **UCI (Universal Chess Interface) move notation**
-: A plainer way to write a move as its start and end squares, like `g1f3`. Dupont accepts moves in either SAN or UCI form. (UCI is also the name of the protocol a program uses to talk to an engine — see below.)
+: A plainer way to write a move as just its start and end squares, like `g1f3` for the same move SAN writes as `Nf3`, or `e1g1` for kingside castling. It is unambiguous and easy for programs to parse. Dupont accepts moves in either SAN or UCI form, so `/w Nxd5` and `/w c6d5` both work. (The acronym "UCI" is also the name of the protocol a program uses to drive an engine — a separate meaning, listed under Computing Terms.)
 
 **FEN (Forsyth–Edwards Notation)**
-: A single line of text that describes one exact board position: where every piece sits, whose turn it is, and a few other details. It is how a specific position is passed around and shown in the position summary.
+: A single line of text that describes one exact board position. It has six space-separated fields: the piece layout rank by rank, whose turn it is (`w` or `b`), castling rights still available (like `KQkq`), the en-passant target square if any (`-` if none), and two move counters. For example, `rnbqkb1r/pppppppp/5n2/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 2 2` reads as: this exact arrangement of pieces, Black to move, both sides may still castle both ways, no en-passant square, and the two clocks.
+: FEN does real work throughout Dupont, not just display. (1) **Navigation save-point:** when the game loads, every position gets its FEN stored, so jumping to a move or stepping with the arrow keys just rebuilds the board from the stored FEN instead of replaying the game from move 1. (2) **Hand-off to Stockfish:** the engine is given the position as a board rebuilt from FEN, so it needs only the current position, not the game history. (3) **A fact given to the language model:** the FEN is included in the facts block sent to the model, so the exact position is stated outright rather than left for the model to infer — this is part of why the model does not drift into a hallucinated board. (4) **A copyable readout:** it is the last line of the position summary, so you can paste the exact position into another board or engine.
 
 **Material**
 : A rough count of each side's pieces by value — pawn 1, knight and bishop 3, rook 5, queen 9. The balance tells you who is up or down material.

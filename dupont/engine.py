@@ -41,7 +41,7 @@ from typing import Any, Optional
 import chess
 import chess.engine
 
-from core.config import config
+from dupont.config import config
 
 logger = logging.getLogger(__name__)
 

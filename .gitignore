@@ -1,10 +1,74 @@
+# ==========================================================================
+# Dupont .gitignore
+# ==========================================================================
+
+# --- Local working artifacts (never committed) ---
 local/
 local-docs/
 .cursor/
 .kiro/
 mkdocs.yml
+
+# --- Agent / tool scratch files ---
+GEMINI.md
+
+# --- Sample games / local PGN inputs ---
+# Note: tests/sample_game.pgn is a tracked test fixture and is NOT ignored.
+games/
+
+# --- Project config kept local (test runner config) ---
+pytest.ini
+
+# --- Documentation build output ---
 site/
-.venv/
+
+# --- Secrets and environment ---
 .env
+.env.*
+!.env.example
+
+# --- Python virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Python bytecode / build artifacts ---
 __pycache__/
 *.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+
+# --- Test, type-check, and lint caches ---
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Operating system files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
