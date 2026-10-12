@@ -42,7 +42,7 @@ jobs:
           cat > mkdocs.yml <<'YAML'
           site_name: Dupont
           site_description: A natural-language adapter for the Stockfish chess engine. Ask about a chess game in plain English and get answers grounded in the engine, not hallucinated. Local prototype, individual use.
-          site_url: https://jconnors23.github.io/dupont/
+          site_url: https://jconnors23.github.io/Dupont/
 
           theme:
             name: material
@@ -65,8 +65,8 @@ jobs:
               - content.code.copy
               - content.code.annotate
 
-          repo_url: https://github.com/jconnors23/dupont
-          repo_name: jconnors23/dupont
+          repo_url: https://github.com/jconnors23/Dupont
+          repo_name: jconnors23/Dupont
           edit_uri: ""
 
           markdown_extensions:

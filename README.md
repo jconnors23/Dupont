@@ -1,10 +1,10 @@
 # Dupont
 
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-7a74c4?logo=materialformkdocs&logoColor=white)](https://jconnors23.github.io/dupont/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-7a74c4?logo=materialformkdocs&logoColor=white)](https://jconnors23.github.io/Dupont/)
 
 > A natural-language Stockfish adapter: ask about a chess game in plain English and get answers grounded in the engine, not hallucinated. Local prototype, individual use.
 
-**Live documentation site: [jconnors23.github.io/dupont](https://jconnors23.github.io/dupont/)**
+**Live documentation site: [jconnors23.github.io/Dupont](https://jconnors23.github.io/Dupont/)**
 
 Dupont is a **natural-language adapter for Stockfish**. It reads a saved chess game (a PGN file) and lets you ask about it in plain English — "why was that a mistake?", "what was my opponent threatening?" — with every answer grounded in the engine's actual calculation rather than guessed at.
 
@@ -103,7 +103,7 @@ dupont/
 | [Status & Roadmap](./docs/conclusions.md) | Prototype status, constraints, and what's planned |
 | [Glossary](./docs/glossary.md) | Key terms, both chess and technical |
 
-The full set is published as a site at **[jconnors23.github.io/dupont](https://jconnors23.github.io/dupont/)**. To browse it locally instead, run `mkdocs serve` and open the address it prints.
+The full set is published as a site at **[jconnors23.github.io/Dupont](https://jconnors23.github.io/Dupont/)**. To browse it locally instead, run `mkdocs serve` and open the address it prints.
 
 ### Publishing The Site
 
