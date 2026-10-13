@@ -6,6 +6,9 @@
 local/
 local-docs/
 .cursor/
+.specstory/
+scripts/
+.cursorindexingignore
 .kiro/
 mkdocs.yml
 

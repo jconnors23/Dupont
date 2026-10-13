@@ -112,6 +112,9 @@ class GameState:
         else:
             pgn_text = str(pgn_source)
 
+        # Strip leading 'start' command keyword if present (e.g. 'start [Event ...]' or 'start 1. e4 ...')
+        pgn_text = re.sub(r"^\s*start\b\s*:?\s*", "", pgn_text, flags=re.IGNORECASE)
+
         # Parse PGN text stream into a Game object
         game = chess.pgn.read_game(io.StringIO(pgn_text))
         if game is None:

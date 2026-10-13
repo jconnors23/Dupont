@@ -13,12 +13,8 @@ ARCHITECTURE & END-TO-END WORKFLOW:
    - When the user runs `python cli.py <game.pgn>`, `main()` parses the file argument.
    - `ChessCLIApp` loads the game into `GameState`, initializes the `StockfishEngine`
      subprocess, and configures the `ChessCoach` LLM client.
-   - Displays position summary in the 5-line format:
-       current move: move <number-player> to go
-       previous move: <color> played <san>
-       Top Engine Suggestion: (move here)
-       Current Eval Score: +0.5
-       FEN: Fen
+   - Displays the position and the command list as left-aligned tables.
+     FEN stays on the position state and is not printed.
 
 2. THE REPL EVENT LOOP (`run()`):
    - KEYBOARD NAVIGATION:
@@ -30,14 +26,15 @@ ARCHITECTURE & END-TO-END WORKFLOW:
    - SLASH COMMANDS & ANALYSIS:
      * `/jump 7-w` / `/jump 7-b`: Jumps timeline to that move, updates the board, and displays
        the position summary.
-     * `/eval-short`: Queries Stockfish for top candidate moves and evaluations.
      * `/eval`: Queries Stockfish for top lines and queries Ollama for a short description of
        why each move is suggested at this time in the current game state.
      * `/eval-long`: Sends ONLY the top eval move to Ollama for a lengthy in-depth paragraph
        explanation of why the engine suggests that decision.
+     * `eval-score`: Explains why the current White-POV score is even, or why White or Black is ahead.
+     * `eval-critical`: Jumps to the next critical decision and explains who is winning and the options.
      * Natural Language Question: Automatically detects if a candidate move or the
        played move is referenced, gathers engine facts, and streams GM coaching advice.
-     * `/q` / `/exit`: Breaks loop and triggers deterministic engine shutdown.
+     * `quit`: Breaks loop and triggers deterministic engine shutdown.
    - PRINT: Renders output using rich terminal panels, markdown, and tables.
    - LOOP: Repeats until user exits or sends EOF (Ctrl+D).
 
@@ -51,26 +48,60 @@ from __future__ import annotations
 import argparse
 import re
 import select
+import shutil
+import socket
+import subprocess
 import sys
+import time
+import urllib.parse
 from pathlib import Path
 from typing import Any, Optional
 
+# Ensure workspace root is in sys.path when invoked directly as a script (e.g. `python dupont/cli.py <pgn>`).
+# For a sophomore CS student: When Python runs a file directly with `python path/to/script.py`, Python sets
+# sys.path[0] to the script's directory (`dupont/`), NOT the workspace root. To allow absolute package imports
+# like `from dupont.coach import ChessCoach` to succeed without requiring `-m` flags or editable installs,
+# we dynamically prepend the workspace root directory (one level up) to sys.path before package imports.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import chess
 from rich import box
-from rich.console import Console
-from rich.markdown import Markdown
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
 from dupont.coach import ChessCoach
-from dupont.pgn_cleaner import clean_pgn_file
+from dupont.pgn_cleaner import clean_pgn_content, clean_pgn_file
 from dupont.config import config
 from dupont.engine import StockfishEngine
 from dupont.game_state import GameState
 
 # Console singleton used for all rich terminal I/O
 console = Console()
+
+
+def coach_endpoint() -> tuple[str, int]:
+    """Host and port of the configured coach server. Ollama's default is localhost:11434."""
+    parsed = urllib.parse.urlparse(config.LLM_BASE_URL)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 11434
+    return host, port
+
+
+def coach_port_open(host: str, port: int) -> bool:
+    """True when something is already accepting coach connections."""
+    probe = socket.socket()
+    probe.settimeout(0.3)
+    try:
+        probe.connect((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
 
 
 def read_user_action(prompt_text: str = "> ") -> tuple[str, str]:
@@ -114,7 +145,13 @@ def read_user_action(prompt_text: str = "> ") -> tuple[str, str]:
             return ("LEFT", "")
         if trimmed in ("\x1b[C", "\x1bOC", "right", "RIGHT", "/n", "/next", "n", "next", "f", "F", "forward", "/f"):
             return ("RIGHT", "")
-        if trimmed.lower() in ("/q", "/quit", "/exit", "q", "quit", "exit"):
+        if trimmed.lower() in ("reset", "/reset", "restart", "/restart"):
+            return ("RESET", "")
+        if trimmed.lower() == "clear":
+            return ("CLEAR", "")
+        if trimmed.lower() in ("help", "/help"):
+            return ("HELP", "")
+        if trimmed.lower() in ("quit", "/quit"):
             return ("QUIT", "")
         return ("COMMAND", trimmed)
 
@@ -198,11 +235,9 @@ def read_user_action(prompt_text: str = "> ") -> tuple[str, str]:
             if not char:
                 return ("QUIT", "")
 
-            # Single-key shortcuts when buffer is empty:
-            # 'f' / 'F' -> move forward (next move)
-            # 'b' / 'B' -> move backward (previous move)
-            # 'n' / 'N' -> next move
-            # 'p' / 'P' -> previous move
+            # Single-key shortcuts when the line is still empty.
+            # Only f/b and n/p. Words such as serve, help, quit, and reset
+            # are typed in full and submitted with Enter.
             if not buffer:
                 if char in ("f", "F"):
                     print()
@@ -284,10 +319,11 @@ def render_board(board: chess.Board, last_move: Optional[chess.Move] = None) -> 
         box=box.ROUNDED,
         padding=(0, 1),
         title=f"[bold]Board View[/bold] ({'White' if board.turn == chess.WHITE else 'Black'} to move)",
+        title_justify="left",
     )
-    table.add_column("Rank", justify="center", style="dim")
+    table.add_column("Rank", justify="left", style="dim")
     for file_char in "a b c d e f g h".split():
-        table.add_column(file_char, justify="center")
+        table.add_column(file_char, justify="left")
 
     # Unicode glyphs for White and Black pieces
     piece_symbols = {
@@ -357,6 +393,215 @@ def get_eval_badge(score_str: str) -> Text:
     return txt
 
 
+def classify_eval_score(score_str: str) -> str:
+    """Classifies a White-point-of-view score as even, white ahead, or black ahead.
+
+    A pawn score between -0.50 and +0.50 matches the balanced badge. Mate and
+    finished-game results follow the side that is winning.
+    """
+    text = score_str.strip()
+    if text in ("1-0", "1–0"):
+        return "white ahead"
+    if text in ("0-1", "0–1"):
+        return "black ahead"
+    if text in ("1/2-1/2", "1/2–1/2", "*"):
+        return "even"
+    if "#" in text:
+        return "black ahead" if "-" in text else "white ahead"
+    try:
+        value = float(text)
+    except ValueError:
+        return "even"
+    if value > 0.5:
+        return "white ahead"
+    if value < -0.5:
+        return "black ahead"
+    return "even"
+
+
+def material_counts(board: chess.Board) -> tuple[int, int]:
+    """Returns (white, black) material, counting a queen as 9 and ignoring kings."""
+    values = {
+        chess.PAWN: 1,
+        chess.KNIGHT: 3,
+        chess.BISHOP: 3,
+        chess.ROOK: 5,
+        chess.QUEEN: 9,
+    }
+    white = 0
+    black = 0
+    for piece in board.piece_map().values():
+        value = values.get(piece.piece_type, 0)
+        if piece.color == chess.WHITE:
+            white += value
+        else:
+            black += value
+    return white, black
+
+
+# A full pawn between the best move and the next one means the choice changes the position.
+CRITICAL_GAP_CP = 100
+
+
+def is_critical_decision(lines: list[dict]) -> bool:
+    """A decision is critical when one choice is much better than the alternative.
+
+    Mate, or a gap of at least one pawn between the top two engine lines, counts.
+    """
+    if not lines:
+        return False
+    if lines[0].get("is_mate"):
+        return True
+    if len(lines) < 2:
+        return False
+    if lines[1].get("is_mate"):
+        return True
+    top_cp = lines[0].get("score_cp_white")
+    second_cp = lines[1].get("score_cp_white")
+    if top_cp is None or second_cp is None:
+        return False
+    return abs(top_cp - second_cp) >= CRITICAL_GAP_CP
+
+
+def exit_cli() -> None:
+    """Clears the session, prints the exit line, and stops the process."""
+    console.clear()
+    console.print("sys.exit(0)")
+    sys.exit(0)
+
+
+def print_section_banner(title: str) -> None:
+    """Prints a full-width cyan rule so each block is easy to find."""
+    console.print()
+    console.rule(
+        f"[bold cyan]{title}[/bold cyan]",
+        style="cyan",
+        align="left",
+        characters="═",
+    )
+
+
+_CHESS_TOKEN = re.compile(
+    r"(?P<notation>(?<![A-Za-z0-9])(?:"
+    r"O-O-O|O-O|0-0-0|0-0|"
+    r"[NBRQK][a-h]?[1-8]?x?[a-h][1-8](?:=[NBRQK])?[+#]?|"
+    r"[a-h](?:x[a-h])?[1-8](?:=[NBRQK])?[+#]?"
+    r")(?![A-Za-z0-9]))"
+    r"|(?P<piece>\b(?:pawns?|knights?|bishops?|rooks?|queens?|kings?)\b)"
+    r"|(?P<check>\b(?:checkmates?|checks?)\b)"
+    r"|(?P<capture>\b(?:capturing|captures|capture)\b)"
+    r"|(?P<castle>\b(?:castling|castles|castle|kingside|queenside)\b)"
+    r"|(?P<white>\bwhite\b)"
+    r"|(?P<black>\bblack\b)"
+    r"|(?P<good>\b(?:advantages?|winning|ahead)\b)"
+    r"|(?P<bad>\b(?:disadvantages?|losing)\b)"
+    r"|(?P<even>\beven\b)"
+    r"|(?P<tactic>\b(?:forks?|pins?|skewers?|discovered|sacrifices?)\b)"
+    r"|(?P<score>[+-]\d+\.\d+|#[+-]?\d+)"
+    r"|(?P<command>\beval-critical\b|\beval-score\b|\beval-long\b|\beval\b)",
+    re.IGNORECASE,
+)
+
+_CHESS_STYLES = {
+    "notation": "bold gold1",
+    "piece": "bold green",
+    "check": "bold red",
+    "capture": "bold yellow",
+    "castle": "bold magenta",
+    "white": "bold white",
+    "black": "bold cyan",
+    "good": "bold yellow",
+    "bad": "bold red",
+    "even": "bold cyan",
+    "tactic": "bold magenta",
+    "score": "bold cyan",
+    "command": "bold cyan",
+}
+
+
+def style_chess_prose(text: str) -> Text:
+    """Colors notation gold, piece names green, and the other chess keywords."""
+    cleaned = re.sub(r"[*`]", "", text)
+    cleaned = re.sub(r"(?m)^>\s?", "", cleaned)
+    cleaned = re.sub(r"(?m)^#{1,6}\s*", "", cleaned)
+    styled = Text()
+    cursor = 0
+    for match in _CHESS_TOKEN.finditer(cleaned):
+        if match.start() > cursor:
+            styled.append(cleaned[cursor:match.start()])
+        kind = match.lastgroup or ""
+        styled.append(match.group(), style=_CHESS_STYLES.get(kind, ""))
+        cursor = match.end()
+    if cursor < len(cleaned):
+        styled.append(cleaned[cursor:])
+    return styled
+
+
+def _styled_move_header(label: str, move_san: str, score: str, continuation: str) -> Text:
+    """Header line with the move in gold and the continuation colored the same way."""
+    header = Text()
+    header.append(label, style="bold")
+    header.append_text(style_chess_prose(move_san))
+    header.append(" (Eval: ")
+    header.append_text(style_chess_prose(score))
+    header.append(")")
+    if continuation:
+        header.append("\nContinuation: ", style="dim")
+        header.append_text(style_chess_prose(continuation))
+    return header
+
+
+def _styled_state_header(score: str, verdict: str, detail: str, continuation: str) -> Text:
+    """Score line plus the colored detail under it."""
+    header = Text()
+    header.append_text(style_chess_prose(score))
+    header.append("  ")
+    header.append_text(style_chess_prose(verdict))
+    if detail:
+        header.append("\n")
+        header.append_text(style_chess_prose(detail))
+    if continuation:
+        header.append("\nContinuation: ", style="dim")
+        header.append_text(style_chess_prose(continuation))
+    return header
+
+
+def describe_engine_move(san: str) -> str:
+    """Turns a SAN move into a short phrase such as 'knight moves to h6'."""
+    text = san.strip().lower()
+    if text in ("", "none"):
+        return "no move"
+
+    suffix = ""
+    if text.endswith("#"):
+        suffix = ", giving checkmate"
+        text = text[:-1]
+    elif text.endswith("+"):
+        suffix = ", giving check"
+        text = text[:-1]
+
+    if text == "o-o":
+        return f"king castles kingside{suffix}"
+    if text == "o-o-o":
+        return f"king castles queenside{suffix}"
+
+    promotion = ""
+    if "=" in text:
+        text, promo = text.split("=", 1)
+        promo_names = {"q": "queen", "r": "rook", "b": "bishop", "n": "knight"}
+        promotion = f" and promotes to {promo_names.get(promo, promo)}"
+
+    piece_names = {"n": "knight", "b": "bishop", "r": "rook", "q": "queen", "k": "king"}
+    piece = "pawn"
+    if text[:1] in piece_names:
+        piece = piece_names[text[0]]
+        text = text[1:]
+
+    verb = "captures on" if "x" in text else "moves to"
+    square = text.replace("x", "")[-2:]
+    return f"{piece} {verb} {square}{promotion}{suffix}"
+
+
 class ChessCLIApp:
     """Coordinates the interactive REPL lifecycle, engine communication, and coaching responses.
 
@@ -367,23 +612,41 @@ class ChessCLIApp:
     """
 
     def __init__(self, pgn_path: str) -> None:
-        self.pgn_path = Path(pgn_path)
-        if not self.pgn_path.exists():
-            console.print(f"[bold red]Error:[/bold red] File not found: {pgn_path}")
-            sys.exit(1)
+        raw_source = str(pgn_path)
+        is_existing_file = False
+        if "\n" not in raw_source and len(raw_source) < 260:
+            try:
+                is_existing_file = Path(raw_source).is_file()
+            except OSError:
+                is_existing_file = False
 
-        # Step 0: Clean non-chess notation lines from PGN file and resave it starting at move 1
-        try:
-            clean_pgn_file(self.pgn_path)
-        except Exception as e:
-            console.print(f"[dim]Note on PGN cleaning: {e}[/dim]")
+        # If source is not an existing file on disk, parse directly as literal pasted PGN in-memory
+        # (e.g. 'start [Event ...] 1. e4 e5' or raw movetext) without needing any filesystem directory.
+        if not is_existing_file:
+            cleaned_text = clean_pgn_content(raw_source)
+            if not cleaned_text.strip():
+                console.print(f"[bold red]Error:[/bold red] File not found or empty PGN: {pgn_path}")
+                sys.exit(1)
+            self.pgn_path = None
+            try:
+                self.game = GameState(cleaned_text)
+            except Exception as e:
+                console.print(f"[bold red]Failed to load PGN:[/bold red] {e}")
+                sys.exit(1)
+        else:
+            self.pgn_path = Path(raw_source)
+            # Step 0: Clean non-chess notation lines from PGN file and resave it starting at move 1
+            try:
+                clean_pgn_file(self.pgn_path)
+            except Exception as e:
+                console.print(f"[dim]Note on PGN cleaning: {e}[/dim]")
 
-        # Step 1: Parse and index the PGN game
-        try:
-            self.game = GameState(self.pgn_path)
-        except Exception as e:
-            console.print(f"[bold red]Failed to load PGN:[/bold red] {e}")
-            sys.exit(1)
+            # Step 1: Parse and index the PGN game
+            try:
+                self.game = GameState(self.pgn_path)
+            except Exception as e:
+                console.print(f"[bold red]Failed to load PGN:[/bold red] {e}")
+                sys.exit(1)
 
         # Initialize timeline pointer to Move 1 (ply 1) if moves exist
         # This displays Move 1 played (e.g. 1. Previous Move (white played e4)) on startup
@@ -403,61 +666,63 @@ class ChessCLIApp:
         # Step 3: Initialize the conversational coach adapter
         console.print("[dim]Initializing Grandmaster Coach...[/dim]")
         self.coach = ChessCoach()
+        # Fullmove number last printed. Stepping onto the next whole move clears the screen.
+        self.last_shown_fullmove: Optional[int] = None
+        # The opening screen leads with commands. Later views put them under the position.
+        self.commands_on_top = True
+
+    def command_rows(self, *, include_help: bool = True) -> list[tuple[str, str]]:
+        """Commands in the order a new session needs them. Help is omitted on the help screen."""
+        rows = [
+            ("serve", "start the coach and wait until it is ready"),
+            ("f", "step forward"),
+            ("b", "step back"),
+            ("eval", "short coach notes on the top moves"),
+            ("eval-long", "a longer explanation of the top move"),
+            ("eval-score", "why the score is even, or why one side is ahead"),
+            ("eval-critical", "jump to the next critical decision and explain it"),
+            ("reset", "jump to the start of the game"),
+            ("quit", "quit"),
+        ]
+        if include_help:
+            rows.insert(-1, ("help", "show these commands"))
+        return rows
+
+    def print_manual(self, *, include_help: bool = True) -> None:
+        """Prints the command list as a cyan two-column table under a banner."""
+        print_section_banner("commands")
+        commands = Table(
+            box=box.SQUARE,
+            show_header=True,
+            show_lines=True,
+            header_style="bold cyan",
+            border_style="cyan",
+            padding=(0, 1),
+        )
+        commands.add_column("command", justify="left", style="bold cyan", no_wrap=True)
+        commands.add_column("action", justify="left")
+        for command, action in self.command_rows(include_help=include_help):
+            commands.add_row(command, action)
+        console.print(commands)
 
     def print_welcome_banner(self) -> None:
-        """Displays startup manual with f/b navigation keys and slash commands."""
-        manual = Table(box=box.SIMPLE, show_header=True, header_style="bold cyan", padding=(0, 2))
-        manual.add_column("Key / Cmd", style="bold yellow", width=24)
-        manual.add_column("What it does", style="white")
-
-        manual.add_row("f (or →)", "Step forward to next move")
-        manual.add_row("b (or ←)", "Step backward to previous move")
-        manual.add_row("/jump 7-w (or 8-b)", "Hop to move (e.g. '/jump 7-w' or '/jump 8-b')")
-        manual.add_row("/jump 7-w, <question>", "Hop & ask in one turn (e.g. '/jump 7-w, why is h3 bad?')")
-        manual.add_row("/eval-short", "Show top engine candidate moves and numerical scores")
-        manual.add_row("/eval", "Show top engine lines with short Ollama explanations")
-        manual.add_row("/eval-long", "In-depth paragraph explanation for top engine move")
-        manual.add_row("/q <question>", "Ask coach about active move (or type question directly)")
-        manual.add_row("/q (or /quit)", "Exit coaching session")
-
-        console.print(
-            Panel(
-                manual,
-                title="[bold cyan]♟  CHESS COACH - QUICK MANUAL  ♟[/bold cyan]",
-                subtitle="[dim]Press 'f' for next move, 'b' for previous move | /help for commands[/dim]",
-                border_style="cyan",
-            )
-        )
+        """Displays the short command list."""
+        self.print_manual()
 
     def get_position_ui_lines(self) -> list[str]:
-        """Formats the position metadata into the required 5-line format.
+        """Builds the position summary as plain lines.
 
-        Format:
-        1. current move: move <number-player> to go
-        2. previous move: <color> played <san>
-        3. Top Engine Suggestion: (move here)
-        4. Current Eval Score: +0.5
-        5. FEN: Fen
+        Order:
+        1. previous move: <color> played <san>
+        2. current move: 5 on White's turn, 5.5 on Black's turn
+        3. turn: white to move, or black to move
+        4. stockfish: <san>, then a plain-language description and a pointer to eval
+        5. score: +0.5
 
-        Pedagogical note for a CS sophomore:
-        When navigating a chess game chronologically:
-        - 'current move' identifies which player's turn it is to act right now,
-          using standard review move-addressing syntax (e.g. 'move 1-b to go'
-          meaning fullmove 1, Black's turn).
-        - 'previous move' identifies the half-move that was just executed on the board
-          leading up to this exact position (e.g., 'white played e4' or 'black played nc6').
-        - 'Top Engine Suggestion' is Stockfish's top evaluated candidate move
-          for the active player from this position.
-        - 'Current Eval Score' is the deterministic engine centipawn/mate score.
-        - 'FEN' is the standard Forsyth-Edwards Notation string capturing the full board state.
+        The FEN stays on the board and on each ply record. It is not printed.
         """
         board = self.game.current_board
 
-        # 1. current move: move <number-player> to go
-        player_char = "w" if board.turn == chess.WHITE else "b"
-        current_move_str = f"current move: move {board.fullmove_number}-{player_char} to go"
-
-        # 2. previous move: <color> played <san>
         idx = self.game.current_ply_index
         if idx == 0 or not self.game.plies:
             prev_move_str = "previous move: none"
@@ -466,33 +731,118 @@ class ChessCLIApp:
             color_str = "white" if prev_ply.is_white else "black"
             prev_move_str = f"previous move: {color_str} played {prev_ply.san.lower()}"
 
-        # 3 & 4. Stockfish analysis: Top Engine Suggestion & Current Eval Score
+        turn_name = "white" if board.turn == chess.WHITE else "black"
+        move_number = board.fullmove_number
+        move_label = str(move_number) if board.turn == chess.WHITE else f"{move_number}.5"
+        current_move_str = f"current move: {move_label}"
+        turn_str = f"turn: {turn_name} to move"
+
         analysis = self.engine.analyze_position(board, depth=14, multipv=1)
-        best_move = analysis.get("best_move") or "none"
+        best_move = (analysis.get("best_move") or "none").lower()
         best_score = analysis.get("best_eval", "0.00")
-        suggestion_str = f"Top Engine Suggestion: {best_move}"
-        eval_score_str = f"Current Eval Score: {best_score}"
+        suggestion_str = (
+            f"stockfish: {best_move}\n"
+            f"stockfish recommends {describe_engine_move(best_move)}\n"
+            "to understand why, do eval"
+        )
+        eval_score_str = f"score: {best_score}"
 
-        # 5. FEN: Fen
-        fen_str = f"FEN: {board.fen()}"
-
-        return [current_move_str, prev_move_str, suggestion_str, eval_score_str, fen_str]
+        return [prev_move_str, current_move_str, turn_str, suggestion_str, eval_score_str]
 
     def get_position_ui_text(self) -> str:
-        """Returns the 5-line formatted UI as a single string."""
+        """Returns the position summary as a single string."""
         return "\n".join(self.get_position_ui_lines())
 
-    def show_position_summary(self) -> None:
-        """Displays position summary according to the required 5-line UI format."""
-        for line in self.get_position_ui_lines():
-            console.print(line)
+    def show_position_summary(self, *, stepped: bool = False) -> None:
+        """Prints the position table. Commands appear only on the opening view.
+
+        Stockfish's notation stays gold. The FEN is not printed. A whole move and
+        its half stay on screen together. Stepping from 8.5 to 9 clears first.
+        """
+        board = self.game.current_board
+        fullmove = board.fullmove_number
+        if (
+            stepped
+            and board.turn == chess.WHITE
+            and self.last_shown_fullmove is not None
+            and fullmove > self.last_shown_fullmove
+        ):
+            console.clear()
+        self.last_shown_fullmove = fullmove
+
+        previous, current, turn, suggestion, score = self.get_position_ui_lines()
+        san, recommendation, why = suggestion.split("\n", 2)
+        stockfish = Text()
+        stockfish.append(san.split(": ", 1)[1], style="bold gold1")
+        stockfish.append("\n")
+        stockfish.append_text(style_chess_prose(recommendation))
+        stockfish.append("\n")
+        stockfish.append_text(style_chess_prose(why))
+
+        commands_first = self.commands_on_top
+        self.commands_on_top = False
+        if commands_first:
+            self.print_manual()
+
+        print_section_banner("position")
+        position = Table(
+            box=box.SQUARE,
+            show_header=False,
+            show_lines=True,
+            border_style="cyan",
+            padding=(0, 1),
+        )
+        position.add_column(justify="left", style="bold cyan", no_wrap=True)
+        position.add_column(justify="left")
+        position.add_row("previous move", style_chess_prose(previous.split(": ", 1)[1]))
+        position.add_row("current move", current.split(": ", 1)[1])
+        position.add_row("turn", style_chess_prose(turn.split(": ", 1)[1]))
+        position.add_row("stockfish", stockfish)
+        position.add_row("score", Text(score.split(": ", 1)[1], style="bold cyan"))
+        console.print(position)
+
+    def cmd_serve(self) -> None:
+        """Starts `ollama serve` if needed and returns once the coach accepts connections."""
+        host, port = coach_endpoint()
+        if coach_port_open(host, port):
+            console.print(f"coach ready  {host}:{port}")
+            return
+
+        ollama = shutil.which("ollama")
+        if not ollama:
+            console.print("ollama not found")
+            return
+
+        # Detach so the server keeps running after this command returns to the prompt.
+        subprocess.Popen(
+            [ollama, "serve"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            if coach_port_open(host, port):
+                console.print(f"coach ready  {host}:{port}")
+                return
+            time.sleep(0.2)
+        console.print(f"coach not ready  {host}:{port}")
+
+    def cmd_restart(self) -> None:
+        """Jumps to the position before any moves and shows that board."""
+        if self.game.plies:
+            self.game.jump_to_ply(0)
+        else:
+            self.game.current_ply_index = 0
+        console.clear()
+        self.show_position_summary()
 
     def cmd_jump_move(self, arg: str) -> None:
         """Navigates to a specific move in the game timeline (e.g. '14', '14w', '14b')."""
         try:
             move_num, is_white = GameState.parse_move_specifier(arg)
             self.game.jump_to_move(move_num, is_white)
-            self.show_position_summary()
+            self.show_position_summary(stepped=True)
         except Exception as e:
             console.print(f"[bold red]Navigation error:[/bold red] {e}")
 
@@ -504,12 +854,13 @@ class ChessCLIApp:
 
         table = Table(
             title=f"Stockfish Evaluation - Top Candidate Lines ({'White' if board.turn == chess.WHITE else 'Black'} to move)",
+            title_justify="left",
             box=box.ROUNDED,
             header_style="bold magenta",
         )
-        table.add_column("#", justify="center", style="dim", width=4)
-        table.add_column("Move", justify="center", style="bold cyan", width=10)
-        table.add_column("Eval (White POV)", justify="center", width=18)
+        table.add_column("#", justify="left", style="dim", width=4)
+        table.add_column("Move", justify="left", style="bold cyan", width=10)
+        table.add_column("Eval (White POV)", justify="left", width=18)
         table.add_column("Continuation Line (PV)", style="white")
 
         for line in analysis.get("lines", [])[:2]:
@@ -560,15 +911,14 @@ class ChessCLIApp:
                 prompt = f"Why is {move_san} suggested at this time?"
                 explanation = self.coach.chat(prompt, facts, system_prompt=system_prompt)
 
-            panel_text = (
-                f"[bold cyan]Line {rank}: {move_san}[/bold cyan] (Eval: {score})\n"
-                f"[dim]Continuation: {pv_str}[/dim]\n\n"
-                f"{explanation.strip()}"
-            )
             console.print(
                 Panel(
-                    panel_text,
+                    Group(
+                        _styled_move_header(f"Line {rank}: ", move_san, score, pv_str),
+                        style_chess_prose(explanation.strip()),
+                    ),
                     title=f"[bold]Candidate Move {rank}: {move_san}[/bold]",
+                    title_align="left",
                     border_style="cyan",
                 )
             )
@@ -608,17 +958,163 @@ class ChessCLIApp:
             prompt = f"Why is {move_san} suggested at this time?"
             explanation = self.coach.chat(prompt, facts, system_prompt=system_prompt)
 
-        summary_text = (
-            f"[bold green]Top Move:[/bold green] [bold cyan]{move_san}[/bold cyan] (Eval: {score})\n"
-            f"[dim]Continuation: {pv_str}[/dim]\n\n"
-            f"{explanation.strip()}"
-        )
         console.print(
             Panel(
-                Markdown(summary_text),
+                Group(
+                    _styled_move_header("Top Move: ", move_san, score, pv_str),
+                    style_chess_prose(explanation.strip()),
+                ),
                 title=f"[bold green]In-Depth Top Move Analysis: {move_san}[/bold green]",
+                title_align="left",
                 subtitle="[dim]Comprehensive Evaluation Explanation[/dim]",
+                subtitle_align="left",
                 border_style="green",
+            )
+        )
+
+    def cmd_eval_critical(self) -> None:
+        """Jumps to the next critical decision and explains who is winning and the options."""
+        start = self.game.current_ply_index
+        if start >= len(self.game.plies):
+            console.print("no critical decision left in this game")
+            return
+
+        found: Optional[int] = None
+        with console.status("[cyan]Looking for the next critical decision...[/cyan]"):
+            for idx in range(start, len(self.game.plies)):
+                board = chess.Board(self.game.plies[idx].fen_before)
+                analysis = self.engine.analyze_position(board, depth=10, multipv=2)
+                if is_critical_decision(analysis.get("lines", [])):
+                    found = idx
+                    break
+
+        if found is None:
+            console.print("no critical decision left in this game")
+            return
+
+        self.commands_on_top = False
+        self.game.jump_to_ply(found)
+        self.show_position_summary()
+
+        board = self.game.current_board
+        with console.status("[cyan]Reading the critical position with Stockfish (depth 16)...[/cyan]"):
+            analysis = self.engine.analyze_position(board, depth=16, multipv=2)
+
+        lines = analysis.get("lines", [])
+        if not lines:
+            console.print("[yellow]No candidate lines found in this position.[/yellow]")
+            return
+
+        score = str(lines[0].get("score_display", analysis.get("best_eval", "0.00")))
+        verdict = classify_eval_score(score)
+        verdict_label = {
+            "even": "even",
+            "white ahead": "white is ahead",
+            "black ahead": "black is ahead",
+        }[verdict]
+        turn_side = "White" if board.turn == chess.WHITE else "Black"
+        option_bits = [
+            f"{line['move']} ({line['score_display']})"
+            for line in lines[:2]
+        ]
+        options = ", ".join(option_bits)
+        pv_str = " ".join(lines[0].get("pv_san", [])[:7])
+        played = self.game.current_ply.san if self.game.current_ply else "none"
+        white_material, black_material = material_counts(board)
+
+        with console.status("[magenta]Asking Coach about this critical decision...[/magenta]"):
+            facts = {
+                "fen": board.fen(),
+                "turn": turn_side,
+                "played_move": played,
+                "score_display": score,
+                "score_verdict": verdict,
+                "best_move_san": lines[0]["move"],
+                "best_eval_white": score,
+                "continuation": pv_str,
+                "options": options,
+                "material_white": white_material,
+                "material_black": black_material,
+            }
+            system_prompt = (
+                "You are an expert Grandmaster chess coach. The evaluation is from White's point of view. "
+                "Write one full paragraph on this critical decision: who is winning and why, then the real "
+                "options for the side to move and what each option is trying to do. Use the engine lines. "
+                "Do not change the verdict."
+            )
+            prompt = f"Who is winning at {score}, and what are {turn_side}'s options?"
+            explanation = self.coach.chat(prompt, facts, system_prompt=system_prompt)
+
+        console.print(
+            Panel(
+                Group(
+                    _styled_state_header(score, verdict_label, f"{turn_side} to move. Options: {options}", pv_str),
+                    style_chess_prose(explanation.strip()),
+                ),
+                title="[bold]critical decision[/bold]",
+                title_align="left",
+                border_style="cyan",
+            )
+        )
+
+    def cmd_eval_score(self) -> None:
+        """Explains why the current score is even, or why White or Black is ahead."""
+        board = self.game.current_board
+        with console.status("[cyan]Reading the evaluation with Stockfish (depth 16)...[/cyan]"):
+            analysis = self.engine.analyze_position(board, depth=16, multipv=1)
+
+        score = str(analysis.get("best_eval", "0.00"))
+        verdict = classify_eval_score(score)
+        verdict_label = {
+            "even": "even",
+            "white ahead": "white is ahead",
+            "black ahead": "black is ahead",
+        }[verdict]
+        best_move = analysis.get("best_move") or "none"
+        pv_str = " ".join(analysis.get("best_pv", [])[:7])
+        white_material, black_material = material_counts(board)
+        turn_side = "White" if board.turn == chess.WHITE else "Black"
+
+        question = {
+            "even": f"Why is this position even at {score}?",
+            "white ahead": f"Why is White ahead at {score}?",
+            "black ahead": f"Why is Black ahead at {score}?",
+        }[verdict]
+        with console.status(f"[magenta]Asking Coach why the position is {verdict_label}...[/magenta]"):
+            facts = {
+                "fen": board.fen(),
+                "turn": turn_side,
+                "score_display": score,
+                "score_verdict": verdict,
+                "best_move_san": best_move,
+                "best_eval_white": score,
+                "continuation": pv_str,
+                "material_white": white_material,
+                "material_black": black_material,
+            }
+            system_prompt = (
+                "You are a Grandmaster chess coach. The evaluation is from White's point of view: "
+                "positive means White is ahead, negative means Black is ahead, and a score from "
+                "-0.50 to +0.50 is even. Explain in one short paragraph why the position matches "
+                "the given verdict. Use material, pawn structure, king safety, and piece activity. "
+                "Do not change the verdict."
+            )
+            explanation = self.coach.chat(question, facts, system_prompt=system_prompt)
+
+        console.print(
+            Panel(
+                Group(
+                    _styled_state_header(
+                        score,
+                        verdict_label,
+                        f"Material: white {white_material}, black {black_material}",
+                        "",
+                    ),
+                    style_chess_prose(explanation.strip()),
+                ),
+                title="[bold]eval score[/bold]",
+                title_align="left",
+                border_style="cyan",
             )
         )
 
@@ -663,6 +1159,7 @@ class ChessCLIApp:
             Panel(
                 info_table,
                 title="[bold red]Deterministic Engine Refutation[/bold red]",
+                title_align="left",
                 border_style="red",
             )
         )
@@ -672,7 +1169,7 @@ class ChessCLIApp:
             user_q = f"Why couldn't I play {refutation['candidate_san']} in this position?"
             coach_reply = self.coach.chat(user_q, refutation)
 
-        console.print(Panel(Markdown(coach_reply), title="[bold green]Grandmaster Coach Analysis[/bold green]", border_style="green"))
+        console.print(Panel(style_chess_prose(coach_reply), title="[bold green]Grandmaster Coach Analysis[/bold green]", title_align="left", border_style="green"))
 
     def cmd_ask_coach(self, question: str) -> None:
         """Handles conversational questions, automatically grounding them with engine analysis.
@@ -729,15 +1226,14 @@ class ChessCLIApp:
         with console.status("[magenta]Coach drafting response...[/magenta]"):
             reply = self.coach.chat(question, engine_facts)
 
-        console.print(Panel(Markdown(reply), title="[bold green]Grandmaster Coach[/bold green]", border_style="green"))
+        console.print(Panel(style_chess_prose(reply), title="[bold green]Grandmaster Coach[/bold green]", title_align="left", border_style="green"))
 
     def print_help(self) -> None:
-        """Displays reference table of the core available commands."""
-        self.print_welcome_banner()
+        """Displays the command table without the help row."""
+        self.print_manual(include_help=False)
 
     def run(self) -> None:
         """Runs the interactive REPL (Read-Eval-Print Loop) until user exits."""
-        self.print_welcome_banner()
         self.show_position_summary()
 
         try:
@@ -745,17 +1241,27 @@ class ChessCLIApp:
                 try:
                     action, text = read_user_action("> ")
                 except (EOFError, KeyboardInterrupt):
-                    console.print("\n[dim]Exiting...[/dim]")
-                    break
+                    exit_cli()
 
                 if action == "QUIT":
-                    console.print("[green]Thanks for analyzing! Good luck in your games.[/green]")
-                    break
+                    exit_cli()
+
+                elif action == "CLEAR":
+                    console.clear()
+                    continue
+
+                elif action == "RESET":
+                    self.cmd_restart()
+                    continue
+
+                elif action == "HELP":
+                    self.print_help()
+                    continue
 
                 elif action == "LEFT":
                     prev_board = self.game.prev_ply()
                     if prev_board is not None:
-                        self.show_position_summary()
+                        self.show_position_summary(stepped=True)
                     else:
                         console.print("[yellow]At beginning of game.[/yellow]")
                     continue
@@ -763,7 +1269,7 @@ class ChessCLIApp:
                 elif action == "RIGHT":
                     next_board = self.game.next_ply()
                     if next_board is not None:
-                        self.show_position_summary()
+                        self.show_position_summary(stepped=True)
                     else:
                         console.print("[yellow]Reached end of game.[/yellow]")
                     continue
@@ -775,13 +1281,22 @@ class ChessCLIApp:
                     user_input = text
                     lowered = user_input.lower()
 
-                    # Dispatch 1: Clean exit (/q, /quit, /exit, q, quit, exit)
-                    if lowered in ("/q", "/quit", "/exit", "q", "quit", "exit"):
-                        console.print("[green]Thanks for analyzing! Good luck in your games.[/green]")
-                        break
+                    if lowered in ("quit", "/quit"):
+                        exit_cli()
 
-                    # Dispatch 2: Help reference (/help, /h, help, ?)
-                    elif lowered in ("/help", "/h", "help", "?"):
+                    elif lowered in ("reset", "/reset", "restart", "/restart"):
+                        self.cmd_restart()
+                        continue
+
+                    elif lowered == "clear":
+                        console.clear()
+                        continue
+
+                    elif lowered in ("serve", "/serve"):
+                        self.cmd_serve()
+                        continue
+
+                    elif lowered in ("help", "/help"):
                         self.print_help()
                         continue
 
@@ -800,11 +1315,19 @@ class ChessCLIApp:
                         self.cmd_eval()
                         continue
 
+                    elif lowered in ("/eval-score", "/eval_score", "eval-score", "eval_score"):
+                        self.cmd_eval_score()
+                        continue
+
+                    elif lowered in ("/eval-critical", "/eval_critical", "eval-critical", "eval_critical"):
+                        self.cmd_eval_critical()
+                        continue
+
                     # Dispatch 6: Step timeline forward (f, forward, n, next)
                     elif lowered in ("f", "forward", "/f", "/forward", "/n", "/next", "n", "next"):
                         next_board = self.game.next_ply()
                         if next_board is not None:
-                            self.show_position_summary()
+                            self.show_position_summary(stepped=True)
                         else:
                             console.print("[yellow]Reached end of game.[/yellow]")
                         continue
@@ -813,18 +1336,12 @@ class ChessCLIApp:
                     elif lowered in ("b", "back", "backward", "/b", "/back", "/backward", "/p", "/prev", "p", "prev"):
                         prev_board = self.game.prev_ply()
                         if prev_board is not None:
-                            self.show_position_summary()
+                            self.show_position_summary(stepped=True)
                         else:
                             console.print("[yellow]At beginning of game.[/yellow]")
                         continue
 
-                    # Dispatch 8: Clear chat memory (/reset, reset)
-                    elif lowered in ("/reset", "reset"):
-                        self.coach.reset_history()
-                        console.print("[green]Coach conversation history reset.[/green]")
-                        continue
-
-                    # Dispatch 9: Check for move jump prefix (/jump 7-w, jump 7-w, /m 7-w, etc.)
+                    # Dispatch 8: Check for move jump prefix (/jump 7-w, jump 7-w, /m 7-w, etc.)
                     move_num, is_white, remaining_query = GameState.parse_move_prefix_and_query(user_input)
                     if move_num is not None and is_white is not None:
                         try:
@@ -835,7 +1352,7 @@ class ChessCLIApp:
 
                         if not remaining_query:
                             # User typed only the move specifier: show summary & wait for next turn
-                            self.show_position_summary()
+                            self.show_position_summary(stepped=True)
                             continue
                         else:
                             # User combined jump with an immediate question: '/jump 7-w, why is h3 bad?'
@@ -863,15 +1380,129 @@ class ChessCLIApp:
             self.engine.close()
 
 
+def prompt_for_pgn() -> str:
+    """Interactively prompts the user to paste a PGN or provide a file path.
+
+    When users copy games from Chess.com or Lichess, the PGN contains shell metacharacters
+    like curly braces ({[%clk ...]}), parentheses ((8. a4 ...)), brackets ([Event ...]),
+    and dollar signs ($4, $6). Pasting directly into a terminal shell like zsh or bash
+    causes immediate shell parse errors (e.g. 'zsh: parse error near }').
+
+    Reading from stdin directly inside Python bypasses the shell parser completely,
+    allowing safe multi-line pasting, piped input (pbpaste | ./start), or entering
+    a file path.
+    """
+    if not sys.stdin.isatty():
+        # Input was piped into stdin (e.g. `cat game.pgn | ./start` or `pbpaste | ./start`)
+        content = sys.stdin.read().strip()
+        if sys.platform != "win32":
+            try:
+                sys.stdin = open("/dev/tty")
+            except Exception:
+                pass
+        return content
+
+    move_pattern = re.compile(r"\b1\s*(?:\.{1,3}|(?=\s+[a-zA-Z\u2654-\u265F]))")
+    result_pattern = re.compile(r"(?:1-0|0-1|1/2-1/2|\*)\s*$")
+
+    # Step 1: Auto-detect if user recently copied a PGN to their system clipboard (e.g. via Chess.com or Lichess).
+    # This prevents users from needing to paste complex multi-line text into the shell, completely avoiding
+    # shell parse errors like `zsh: parse error near }` caused by unquoted curly braces or parenthesis.
+    if sys.platform == "darwin":
+        try:
+            res = subprocess.run(["pbpaste"], capture_output=True, text=True, timeout=1)
+            if res.returncode == 0 and res.stdout.strip():
+                clip_text = res.stdout.strip()
+                if move_pattern.search(clip_text) or "[Event " in clip_text or "[Site " in clip_text:
+                    console.print("[bold green]✓ Loaded PGN directly from clipboard.[/bold green]")
+                    return clip_text
+        except Exception:
+            pass
+
+    console.print(
+        Panel(
+            "[bold cyan]♟  DUPONT CHESS COACH  ♟[/bold cyan]\n\n"
+            "Paste your PGN below (or enter a path to a .pgn file).\n"
+            "[dim]Press Enter after pasting (or Ctrl+D when finished):[/dim]",
+            title_align="left",
+            border_style="cyan",
+        )
+    )
+
+    lines: list[str] = []
+    has_moves = False
+
+    while True:
+        try:
+            line = sys.stdin.readline()
+        except (EOFError, KeyboardInterrupt):
+            break
+
+        if not line:  # EOF (Ctrl+D)
+            break
+
+        # Check if first non-empty input is an existing file path
+        if not lines and line.strip():
+            candidate = line.strip()
+            if "\n" not in candidate and len(candidate) < 260:
+                try:
+                    if Path(candidate).is_file():
+                        return candidate
+                except OSError:
+                    pass
+
+        lines.append(line)
+        stripped = line.strip()
+
+        if not has_moves and move_pattern.search(line):
+            has_moves = True
+
+        if has_moves:
+            # Empty line after moves were seen signals end of input
+            if not stripped:
+                break
+            # Standard game result marker terminates the PGN movetext
+            if result_pattern.search(stripped):
+                break
+
+    return "".join(lines).strip()
+
+
 def main() -> None:
     """CLI argument entry point."""
     parser = argparse.ArgumentParser(
         description="Interactive Terminal CLI Chess Coaching Tool."
     )
-    parser.add_argument("pgn_path", help="Path to PGN file to review.")
+    parser.add_argument(
+        "pgn_path",
+        nargs="*",
+        default=[],
+        help="Path to PGN file, literal pasted PGN string, or omit to paste interactively.",
+    )
     args = parser.parse_args()
 
-    app = ChessCLIApp(args.pgn_path)
+    if not args.pgn_path:
+        pgn_input = prompt_for_pgn()
+        if not pgn_input:
+            console.print("[yellow]No PGN provided. Exiting.[/yellow]")
+            sys.exit(0)
+    elif len(args.pgn_path) == 1:
+        pgn_input = args.pgn_path[0]
+    else:
+        first_arg = args.pgn_path[0]
+        is_first_file = False
+        if "\n" not in first_arg and len(first_arg) < 260:
+            try:
+                is_first_file = Path(first_arg).is_file()
+            except OSError:
+                is_first_file = False
+
+        if is_first_file:
+            pgn_input = first_arg
+        else:
+            pgn_input = " ".join(args.pgn_path)
+
+    app = ChessCLIApp(pgn_input)
     app.run()
 
 

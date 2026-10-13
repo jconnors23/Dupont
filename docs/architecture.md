@@ -1,6 +1,7 @@
 ---
 hide:
   - toc
+icon: material/chess-knight
 ---
 
 # How It Works
@@ -14,9 +15,10 @@ Dupont is a natural-language adapter for Stockfish: the engine does the chess, a
 | Game navigation | `dupont/game_state.py` | Reads the PGN, splits it into individual half-moves, and tracks where you are in the game. |
 | Chess engine | `dupont/engine.py` | Wraps Stockfish. Scores positions, lists top moves, and works out why a move fails. |
 | Coach | `dupont/coach.py` | Sends the engine's facts and your question to the language model and returns its reply. |
-| Terminal app | `dupont/cli.py` | The command loop you type into. Draws the board, reads your commands, and calls the other three. |
+| Terminal app | `dupont/cli.py` | The command loop you type into. Draws the position, reads your commands, starts the coach on request, and calls the other parts. |
 | PGN cleaner | `dupont/pgn_cleaner.py` | Strips header tags so a loaded game starts at move 1. |
 | Settings | `dupont/config.py` | Reads the engine path and model settings from your environment or a `.env` file. |
+| Paste helper | `scripts/start-chess-com-paste.zsh` | A zsh helper that lets you paste a Chess.com game (with its clock comments) at the shell without the braces tripping a shell parse error. |
 
 A half-move (one side playing once) is called a *ply*. A full move number like "14" covers White's 14th move and Black's reply, so the program tracks position by ply and lets you ask for either side of a move number.
 
@@ -25,29 +27,23 @@ A half-move (one side playing once) is called a *ply*. A full move number like "
 When you ask the coach something, the position is analyzed first and the engine's results are handed to the language model. The model never calculates chess itself; it only rewrites the engine's findings as advice.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'18px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8','actorBkg':'#7a74c4','actorBorder':'#b4afe8','actorTextColor':'#f6f6fb','signalColor':'#d6d2f0','signalTextColor':'#d6d2f0','noteBkgColor':'#8b84e4','noteTextColor':'#15131f'}}}%%
-sequenceDiagram
-    participant You
-    participant App as Terminal app (cli.py)
-    participant Game as Game navigation
-    participant Engine as Stockfish
-    participant Coach as Language model
-
-    You->>App: type a question
-    App->>Game: what is the current position?
-    Game-->>App: board + which move was played
-    App->>Engine: analyze this position
-    Engine-->>App: top moves, scores, best line
-    App->>Engine: if a move was named, why does it fail?
-    Engine-->>App: refutation and eval change
-    App->>Coach: question + engine facts
-    Coach-->>App: plain-language answer
-    App-->>You: show the answer
+%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':55,'rankSpacing':60}}}%%
+flowchart TB
+    A([You type a question]) --> B[Stockfish analyzes<br/>the current position]
+    B --> C{Did you name<br/>a move?}
+    C -->|yes| D[Stockfish also works out<br/>why that move fails]
+    C -->|no| E[Use the position's<br/>best move and score]
+    D --> F[Hand the engine facts<br/>to the model]
+    E --> F
+    F --> G([Read the plain-English answer])
 ```
 
 If the question names a specific move, the app also asks the engine to refute that exact move. If it does not, but you are sitting on a move that was played in the game, the app refutes the played move so questions like "why is this a mistake?" have something concrete to explain.
 
 ## What The Engine Produces
+
+!!! important "Every evaluation is computed by Stockfish, never by the language model"
+    The scores, the best move, the candidate lines, the principal variations, the refutations, and the move-quality labels are all produced **programmatically by the Stockfish engine** — a real Stockfish process doing its own search and evaluation, with the results read back and formatted in plain Python. **No language model is involved in any of it.** There is no model call anywhere in the evaluation path: the number `+1.25`, the move `Nf6`, the label "Blunder" are all deterministic engine output. The language model is called **only afterward**, and **only** to put those already-computed facts into words — it never calculates a score, picks a move, or decides a label. If the model is turned off entirely, every evaluation above is unchanged; you simply get the engine facts without the prose.
 
 The engine wrapper (`dupont/engine.py`) exposes two things the rest of the program relies on.
 
@@ -70,41 +66,30 @@ These thresholds are fixed in the engine wrapper, so the same move always gets t
 The coach is given a strict instruction set and a block of engine facts, and nothing else to work from. The facts block names the position, whose turn it is, the move played, the engine's best move and score, the move being asked about and its label, and the opponent's punishing reply when there is one.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':60,'rankSpacing':70,'padding':14}}}%%
-flowchart TB
-    SP[Fixed coaching instructions:<br/>explain, do not calculate] --> MSG
-    EF[Engine facts for this position] --> FMT[Formatted facts block]
-    Q[Your question] --> MSG[Message sent to the model]
-    FMT --> MSG
-    MSG --> LLM[Local language model via Ollama]
-    LLM --> R{Did the model reply?}
-    R -->|yes| ANS[Coaching answer in plain language]
-    R -->|no, server down| FB[Fallback: show the engine facts directly]
-
-    classDef engine fill:#7a74c4,stroke:#b4afe8,color:#f6f6fb,font-size:18px;
-    classDef model fill:#2d2846,stroke:#b4afe8,color:#eceaf6,font-size:18px;
-    classDef out fill:#8b84e4,stroke:#15131f,color:#15131f,font-size:18px;
-    class EF,FMT engine;
-    class SP,MSG,LLM model;
-    class ANS,FB out;
+%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':50,'rankSpacing':60}}}%%
+flowchart LR
+    A[Engine facts<br/>+ your question] --> B{Is the model<br/>running?}
+    B -->|yes| C[Model explains the<br/>facts in plain English]
+    B -->|no| D[Print the engine<br/>facts as they are]
 ```
 
-The instructions tell the model to translate the engine's lines into human ideas (naming tactics like forks, pins, and back-rank weaknesses, or positional points like king safety and piece activity) and to never invent moves or scores. Because the model only sees the engine's facts, it has nothing to hallucinate from.
+The model is handed one thing — the engine's facts plus your question — and told to explain, never to calculate. Its instructions ask it to translate the engine's lines into human ideas (naming tactics like forks, pins, and back-rank weaknesses, or positional points like king safety and piece activity) and never to invent a move or a score. Because that is all it ever sees, it has nothing to hallucinate from.
 
 If the language model server is unreachable, the coach does not fail. It falls back to printing the engine's facts in a readable form, so you still get the best move, the score, and the refutation even with no model running.
 
 ## Where State Lives
 
-The game is loaded once into memory as a list of plies, and a single index marks the current position. Stepping forward or back, or jumping to a move number, just moves that index. The engine runs as a separate Stockfish process that the app starts on launch and shuts down on exit. The coach keeps a running conversation history so follow-up questions have context, and you can clear that history at any time.
+The game is loaded once into memory as a list of plies, and a single index marks the current position. Stepping forward or back, jumping to a move number, or skipping to the next critical decision just moves that index. The engine runs as a separate Stockfish process that the app starts on launch and shuts down on exit. The language model is a separate server; it does not start with the app, so the `serve` command launches it on demand and waits until it is ready. The coach keeps a running conversation history so follow-up questions have context, and resetting jumps back to the start of the game.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'state':{'nodeSpacing':60,'rankSpacing':70}}}%%
-stateDiagram-v2
-    [*] --> Loading: start with a PGN path
-    Loading --> AtPosition: game parsed, engine started
-    AtPosition --> AtPosition: step, jump, eval, ask, why-not
-    AtPosition --> Exit: quit
-    Exit --> [*]: engine process closed
+%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':55,'rankSpacing':60}}}%%
+flowchart TB
+    A([Start with a game]) --> B[Load the game,<br/>start Stockfish]
+    B --> C[Sit on a position]
+    C -->|step, jump, eval, ask, serve| C
+    C -->|quit| D([Close Stockfish and exit])
 ```
+
+Each command just acts on the position you are sitting on, then hands you back to the same prompt — until you quit.
 
 For the exact commands that drive these transitions, see the [Commands Reference](./using-the-coach.md).

@@ -12,20 +12,18 @@ It exists to fix a specific failure: uploading a PGN straight into a general cha
 
 The design keeps two jobs apart. **Stockfish** does the exact calculation (best moves, position scores, refutations). A **local language model** (through Ollama) only puts those facts into words; it is told to explain what the engine found and never to invent moves or evaluations of its own. The language model is a translator for the engine, not a chess player in its own right.
 
-> **Status:** early prototype for personal, single-machine use. There is no packaged release and no hosted version; the docs are working notes rather than a public user guide.
+> **Status:** v1 release of a personal, single-machine prototype (everything before this was v0). There is no packaged distribution and no hosted version; the docs are working notes rather than a public user guide.
 
 ## How It Works
 
+The program runs these steps in order, left to right:
+
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'18px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':55,'rankSpacing':65}}}%%
-flowchart TB
-    PGN[PGN game file] --> GS[Game navigation]
-    GS -->|current position| ENG[Stockfish engine]
-    ENG -->|scores, best moves,<br/>refutations| FACTS[Engine facts]
-    USER[Your question] --> COACH[Language model coach]
-    FACTS --> COACH
-    COACH -->|plain-language answer| OUT[Terminal display]
-    GS --> OUT
+%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':50,'rankSpacing':55}}}%%
+flowchart LR
+    A([Pick a position]) --> B[Stockfish:<br/>best move + score]
+    B --> C[Model:<br/>plain-English advice]
+    C --> D([You read it])
 ```
 
 ## Quickstart
@@ -48,27 +46,37 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Optionally start a local model for written explanations (skip it and the coach prints engine facts instead):
+Optionally pull a local model for written explanations (skip it and the coach prints engine facts instead). You do not need to start the server by hand — the `serve` command does that from inside a session — but you can pull the model ahead of time:
 
 ```bash
 ollama pull llama3.1:8b
 ```
 
-```bash
-ollama serve
-```
-
-Run a game:
+Run a game using `./start` (or `python -m dupont.cli`):
 
 ```bash
-python -m dupont.cli tests/sample_game.pgn
+# 1. Interactive paste prompt (safest when copying multi-line PGNs from Chess.com/Lichess):
+./start
+
+# 2. Pipe directly from your clipboard on macOS:
+pbpaste | ./start
+
+# 3. Pass a PGN file path:
+./start path/to/game.pgn
+
+# 4. Or pass a quoted PGN string:
+./start "1. e4 e5 2. Nf3 Nc6 3. Bb5"
 ```
 
-Run the tests (uses `pytest` and `hypothesis`):
+> **Note on shell pasting:** Never paste raw unquoted PGN text directly into your shell (e.g. `start [Event ...]`), because `{`, `}`, `(`, `)`, `$`, and `[` are shell syntax characters in `zsh` and `bash`. Run `./start` with no arguments to get an interactive prompt that accepts raw pastes safely.
+
+Inside a session, type `serve` to start the local coach, `eval` / `eval-long` / `eval-score` / `eval-critical` for explanations at different depths, `f` / `b` (or the arrow keys) to step, or a plain-English question. See the [Commands Reference](./docs/using-the-coach.md).
+
+Run the tests (68 tests, using `pytest` and `hypothesis`):
 
 ```bash
 pytest -v
-# or: python run_tests.py
+# or: python run_tests.py  (also: make test)
 ```
 
 This project targets Python 3.11+ (developed on 3.13). Full setup details are in the documentation linked below.
@@ -79,17 +87,23 @@ This project targets Python 3.11+ (developed on 3.13). Full setup details are in
 dupont/                        # workspace root
 ├── dupont/                    # the application package
 │   ├── __init__.py
+│   ├── __main__.py            # `python -m dupont` entry point
 │   ├── cli.py                 # Interactive terminal loop: navigation, commands, questions
 │   ├── config.py              # Reads engine path and model settings from .env
 │   ├── engine.py              # Stockfish wrapper: analysis and move refutation
 │   ├── game_state.py          # PGN parsing and move navigation
 │   ├── pgn_cleaner.py         # Strips PGN headers so a game starts at move 1
 │   └── coach.py               # LLM client: turns engine facts into plain-language coaching
+├── scripts/
+│   └── start-chess-com-paste.zsh  # zsh helper for pasting a Chess.com game safely
 ├── tests/
 │   ├── test_chess_coach.py    # Test suite (pytest, unittest.mock, Hypothesis)
-│   └── sample_game.pgn        # The 1858 Opera Game
-├── games/                     # Sample PGNs for review
+│   ├── sample_game.pgn        # The 1858 Opera Game
+│   ├── pilot-game.pgn         # A messy practice game for `make pilot`
+│   └── chess-com-share-paste.pgn  # Raw Chess.com Share→PGN fixture
 ├── docs/                      # Documentation site source (MkDocs)
+├── start                      # Launcher: clipboard, paste, pipe, or file
+├── makefile                   # make start / pilot / cleanup / test
 ├── run_tests.py               # Runs the test suite without extra flags
 ├── pytest.ini                 # Test configuration
 ├── requirements.txt

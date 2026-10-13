@@ -1,0 +1,27 @@
+[Event "Live Chess"]
+[Site "Chess.com"]
+[Date "2026.10.13"]
+[Round "?"]
+[White "Prct"]
+[Black "bely"]
+[Result "0-1"]
+[TimeControl "600+5"]
+[WhiteElo "581"]
+[BlackElo "536"]
+[Termination "bears won by resignation"]
+[ECO "A40"]
+[EndTime "12:01:21 GMT+0000"]
+[Link "https://www.chess.com/game/live/185259452140?username=priepct&move=0"]
+
+1. Nf3 {[%clk 0:10:02.1][%timestamp 29]} 1... g6 {[%clk 0:10:02.7][%timestamp
+23]} 2. d4 {[%clk 0:10:04.2][%timestamp 29]} 2... Bg7 {[%clk
+0:10:06.8][%timestamp 9]} 3. g3 {[%clk 0:10:06.2][%timestamp 30]} 3... d5 {[%clk
+0:10:10][%timestamp 18]} 4. Bg2 {[%clk 0:10:08.4][%timestamp 28]} 4... Nh6
+{[%clk 0:10:12.7][%timestamp 23]} 5. O-O {[%clk 0:10:11.3][%timestamp 21]} 5...
+Nf5 {[%clk 0:10:15.6][%timestamp 21]} 6. c4 {[%clk 0:10:05][%timestamp 113]}
+6... dxc4 {[%clk 0:10:18.2][%timestamp 24]} 7. Nbd2 {[%clk 0:10:06.4][%timestamp
+36]} 7... b5 {[%clk 0:10:17.3][%timestamp 59]} 8. e4 {[%clk 0:09:41][%timestamp
+304]} 8... Nxd4 {[%clk 0:10:16.1][%timestamp 62]} 9. Nxd4 {[%clk
+0:09:42.6][%timestamp 34]} 9... Qxd4 {[%clk 0:10:15.2][%timestamp 59]} 10. b3
+{[%clk 0:09:09][%timestamp 386]} 10... Qxa1 {[%clk 0:10:14.9][%timestamp 53]}
+0-1

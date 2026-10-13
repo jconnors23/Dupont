@@ -1,6 +1,7 @@
 ---
 hide:
   - toc
+icon: material/chess-king
 ---
 
 # Dupont: Reviewing a Chess Game in Plain Language
@@ -15,8 +16,8 @@ Dupont fixes that by putting a real chess engine between you and the language mo
 
 ## How The Two Pieces Split The Work
 
-- A chess engine (**Stockfish**) does the exact calculation: which move is best, how good a position is, and what punishes a bad move. These are facts, computed the same way every time.
-- A language model (run locally through **Ollama**) does only the *wording*: it turns the engine's numbers and move lists into readable advice. It is told to explain what the engine found and never to invent moves or evaluations of its own.
+- A chess engine (**Stockfish**) does the exact calculation: which move is best, how good a position is, and what punishes a bad move. These scores and moves are computed entirely by the engine, in code — **no language model touches them** — so they come out the same way every time.
+- A language model (run locally through **Ollama**) does only the *wording*: it turns the engine's numbers and move lists into readable advice. It is called only after the engine has done the calculation, and it is told to explain what the engine found and never to invent a move or a score of its own.
 
 So the language model is a **translator for the engine, not a chess player**. If the engine says a move loses two points of material, the model explains *why* in words, but it does not get to disagree about the two points. That is the one thing a raw chatbot cannot promise.
 
@@ -30,34 +31,27 @@ A second engine is planned behind the same adapter: **Leela Chess Zero (Lc0)**, 
 !!! note "Project status"
     Dupont is an early prototype for personal use. It runs locally on one machine, there is no hosted version, and the docs here are working notes rather than a public user guide.
 
-    **✅ Phase 0 (scaffolding) is complete** — the full working skeleton was built in a single session. **🟡 Phase 1 (testing the prototype and debugging) is next.** The [Status & Roadmap](./conclusions.md) page tracks every phase with status markers.
+    **✅ This is the v1 release.** Phase 0 (scaffolding) and Phase 1 (prototype testing, debugging, and the reworked interactive interface) are both complete; everything before v1 was v0. The [Status & Roadmap](./conclusions.md) page tracks every phase with status markers, and the planned second engine is on the [Dual-Engine Design](./architecture/design.md) page.
 
 ## What It Can Do Today
 
-- Load any PGN game and step through it one key at a time (`f` forward, `b` back, or the arrow keys), or jump straight to a move number.
-- See the engine's top candidate moves and its score for the current position.
+- Load a game from a PGN file, your clipboard, a pipe, or a paste — including a game copied straight from Chess.com — and step through it one key at a time (`f` forward, `b` back, or the arrow keys), or jump straight to a move number.
+- See the engine's best move and score on every position, with the move named in plain language.
+- Ask the engine to explain the score (`eval-score`), explain the top moves (`eval`, `eval-long`), or skip ahead to the next critical decision and explain it (`eval-critical`).
 - Ask "why not this move?" for any legal move and get the engine's refutation, then a plain-language explanation of it.
 - Ask free-form questions about the position and get an answer grounded in the engine's analysis.
+- Start the local coach from inside the session with `serve`; without it, every engine feature still works and the coach prints engine facts.
 
 ## How The Pieces Fit Together
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':60,'rankSpacing':70,'padding':14}}}%%
-flowchart TB
-    PGN[PGN game file] --> GS[Game navigation]
-    GS -->|current position| ENG[Stockfish engine]
-    ENG -->|scores, best moves,<br/>refutations| FACTS[Engine facts]
-    USER[Your question] --> COACH[Language model coach]
-    FACTS --> COACH
-    COACH -->|plain-language answer| OUT[Terminal display]
-    GS --> OUT
+It is one simple pipeline, read left to right: the engine does the chess, then the model does the wording.
 
-    classDef fact fill:#7a74c4,stroke:#b4afe8,color:#f6f6fb,font-size:18px;
-    classDef think fill:#2d2846,stroke:#b4afe8,color:#eceaf6,font-size:18px;
-    classDef io fill:#8b84e4,stroke:#15131f,color:#15131f,font-size:18px;
-    class ENG,FACTS fact;
-    class GS,COACH think;
-    class PGN,USER,OUT io;
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':50,'rankSpacing':55}}}%%
+flowchart LR
+    A([Pick a position in the game]) --> B[Stockfish calculates:<br/>best move and score]
+    B --> C[The model turns the numbers<br/>into plain-English advice]
+    C --> D([Read the answer in the terminal])
 ```
 
 The engine always runs first and produces the facts. The coach only ever sees those facts plus your question, so its answer stays tied to what was actually calculated.
