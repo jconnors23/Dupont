@@ -1,6 +1,7 @@
 ---
 hide:
   - toc
+icon: material/chess-pawn
 ---
 
 # Local Setup
@@ -52,42 +53,60 @@ The settings and their defaults:
 | `LLM_MODEL` | `llama3.1:8b` | Which model to use for explanations. |
 | `OPENAI_API_KEY` | `ollama` | A placeholder key. Ollama ignores it, but the client library requires some value. |
 
-## Step 3: Start Your Local Model
+## Step 3: Pull The Model (One Time)
 
-If you are using Ollama, make sure it is running and the model is pulled:
+If you are using Ollama, pull the default model once:
 
 ```bash
 ollama pull llama3.1:8b
 ```
 
-```bash
-ollama serve
-```
-
-Skip this step if you only want the engine analysis; the coach will fall back to showing engine facts.
+You do not have to start the server by hand. Inside a session, the `serve` command launches `ollama serve` for you and waits until it is ready. You can still start it manually with `ollama serve` if you prefer. Skip the model entirely if you only want the engine analysis; the coach falls back to printing engine facts when no model is running.
 
 ## Step 4: Run A Game
 
-Point the program at a PGN file. A sample game is included:
+There are a few ways to hand a game to the program.
+
+**From a PGN file.** Point it at the included sample:
 
 ```bash
 python -m dupont.cli tests/sample_game.pgn
 ```
 
-That opens the interactive session on the first move. From there, type a command or a question. The [Commands Reference](./using-the-coach.md) page lists everything you can type.
+**From the clipboard or an interactive paste.** Run the launcher with no argument and it reads a game from your clipboard, or lets you paste one at the prompt:
+
+```bash
+./start
+```
+
+**Piped in.** Send a game straight through standard input:
+
+```bash
+pbpaste | ./start
+```
+
+The `make` targets wrap the same launcher: `make start` (clipboard or paste), `make start games/2.pgn` (a file), and `make pilot` (opens a built-in, deliberately messy practice game that exercises the PGN cleaner). To clean a game down to its moves without opening a session, use `make cleanup` (clipboard or prompt) or `make cleanup games/2.pgn`; add `OUT=clean.pgn` to write the result to a file.
+
+Once a game is loaded, the session opens on the first move with the command list shown above the position. From there, type a command or a question. The [Commands Reference](./using-the-coach.md) page lists everything you can type.
+
+!!! note "Pasting a game copied from Chess.com"
+    A game copied with Chess.com's **Share → PGN** carries clock comments like `{[%clk 0:10:02][%timestamp 29]}`. Those curly braces are a problem for the shell, not for Dupont: in zsh, typing the word `start` followed by an unquoted paste that contains `{ }` fails with a shell parse error before the program ever runs. The repo ships a small zsh helper, `scripts/start-chess-com-paste.zsh`, that captures the pasted text safely before zsh chokes on the braces; a project setup can source it so a raw Chess.com paste just works. The reliable paths that always work are the clipboard (`./start`) and the pipe (`pbpaste | ./start`).
+
+!!! note "A loaded PGN file is rewritten in place"
+    When you load a game from a file, Dupont strips the header tags and anything above move 1 and rewrites that file, so it starts directly at `1. ...`. The sample file is cleaned to its movetext on first run. Keep an original copy if the headers matter to you.
 
 ## Running The Tests
 
-The tests are written in `pytest`, using `unittest.mock.MagicMock` for isolating network calls and `hypothesis` for generative property-based testing. They cover game navigation, move-address parsing (including the `/jump 7-w` form and the hop-and-ask prefix), the engine wrapper (including finding a forced mate as a refutation), the coach's online and offline behavior, the PGN cleaner, and the CLI's position-summary formatting. The engine and `/eval` tests need Stockfish installed; the coaching tests use a local model when one is reachable and otherwise exercise the offline fallback.
+The tests are written in `pytest`, using `unittest.mock.MagicMock` for isolating network calls and `hypothesis` for generative property-based testing. They cover game navigation, move-address parsing (including the `jump 7-w` form and the hop-and-ask prefix), the engine wrapper (including finding a forced mate as a refutation), the coach's online and offline behavior, the PGN cleaner, the CLI's position summary and commands, and parsing a raw game copied from Chess.com (clocks, timestamps, and the shell-safe paste). The engine tests need Stockfish installed; the coaching tests mock the model API, so they run offline without a model server.
 
 ```bash
 pytest
 ```
 
-Or run via the test runner script:
+Or run via the test runner script, which the `make test` target also calls:
 
 ```bash
 python run_tests.py
 ```
 
-All 31 tests pass on a setup with Python 3.13 and Stockfish installed.
+The suite has 68 tests. They pass on a setup with Python 3.13 and Stockfish installed; the engine tests need Stockfish on your PATH.

@@ -1,11 +1,12 @@
 ---
 hide:
   - toc
+icon: material/flag-checkered
 ---
 
 # Status & Roadmap
 
-Dupont is an early prototype for personal use. This page is honest about what works today, what it depends on, and what is planned next. It is not a product announcement.
+Dupont is a personal-use prototype at its **v1** release. This page is honest about what works today, what it depends on, and what is planned next. It is not a product announcement. Everything before the v1 release is referred to as v0.
 
 ## Status Markers
 
@@ -17,26 +18,24 @@ The phases and tables below use three markers:
 
 ## Phases
 
-### ✅ Phase 0 — Scaffolding (completed today)
+### ✅ Phase 0 — Scaffolding
 
-The groundwork was built in a single session: the full working skeleton of the tool and its documentation. This phase is complete.
+The groundwork: the full working skeleton of the tool and its documentation. Complete.
 
 - ✅ One source package `dupont/`: move navigation (`game_state.py`), the Stockfish engine wrapper (`engine.py`), the coaching LLM client (`coach.py`), the PGN cleaner (`pgn_cleaner.py`), settings (`config.py`), and the CLI (`cli.py`).
-- ✅ Interactive terminal REPL (`dupont/cli.py`): single-key stepping (`f`/`b` and arrow keys) plus slash commands — `/jump` to a move, three evaluation depths (`/eval-short`, `/eval`, `/eval-long`), refute, ask, board, reset, and quit.
 - ✅ The anti-hallucination design: the coach only ever receives engine facts, never calculates chess itself.
 - ✅ Offline fallback that prints engine facts when no language model is running.
-- ✅ Test suite (31 tests with pytest, MagicMock, and Hypothesis) covering navigation, move-address parsing, the engine wrapper, the coach, the PGN cleaner, and the CLI summary formatting.
 - ✅ Documentation site (this set), themed, with the dual-engine design and a glossary, plus the GitHub Pages workflow.
 
-### 🟡 Phase 1 — Prototype testing and debugging (next)
+### ✅ Phase 1 — Prototype testing, debugging, and the v1 interface (the v1 release)
 
-The next phase is to actually exercise the prototype on real games and fix what breaks. This is the current focus.
+The prototype was exercised on real games and the interactive interface was reworked around what that revealed. This is the **v1** release; everything before it was v0.
 
-- 🟡 Run real PGNs end to end (not just the sample) and confirm the coach's explanations hold up against the engine facts.
-- 🟡 Debug edge cases in move parsing, navigation, and the slash-command surface.
-- 🟡 Check behavior when the language model is slow, unreachable, or returns something unexpected.
-- 🟡 Tighten the prompt and fact block where the coaching reads thin or drifts from the engine's numbers.
-- ⬜ Note recurring problems and settle the command surface before building more on top of it.
+- ✅ Fixed loading a game copied straight from Chess.com. The failure was in the shell, not the parser: a zsh helper (`scripts/start-chess-com-paste.zsh`) now captures a pasted game before the clock-comment braces trip a shell parse error. Added clipboard and piped-input paths as reliable alternatives.
+- ✅ Reworked the interactive view: the command list prints above the first position and then steps aside; the position summary shows the previous and current move, whose turn it is in words, the engine's best move named in plain language, and the score; the FEN moved out of the display into state; the screen clears as you cross into a new move number; everything is left-aligned with cyan banners and colored move notation.
+- ✅ Settled the command surface on whole words (`serve`, `help`, `quit`, `reset`) with single letters reserved for stepping. Added `serve` (starts the local coach and waits until it is ready), `eval-score` (why the score is even or who is ahead), and `eval-critical` (skip to the next critical decision and explain it); `reset` jumps to the start of the game.
+- ✅ Gave the coach the score, the plain verdict (even / ahead), and the material count as facts, and firmed up the offline fallback summary.
+- ✅ Test suite grown to 68 tests (pytest, MagicMock, Hypothesis), including a dedicated class for parsing a raw Chess.com share-paste; added a `make pilot` interactive practice game that genuinely exercises the cleaner.
 
 ### ⬜ Phase 2 — Second engine (Leela Chess Zero)
 
@@ -56,11 +55,13 @@ The core idea is working: **a natural-language adapter for Stockfish beats handi
 
 | Area | Status |
 | :--- | :--- |
-| PGN loading and move navigation | ✅ Working |
+| PGN loading from a file, clipboard, pipe, or Chess.com paste | ✅ Working |
+| Move navigation (step, jump, skip to next critical decision) | ✅ Working |
 | Stockfish analysis, scoring, and refutations | ✅ Working |
-| Local language-model coaching through an OpenAI-compatible endpoint | ✅ Working |
+| Evaluation commands (`eval`, `eval-long`, `eval-score`, `eval-critical`) | ✅ Working |
+| Local language-model coaching through an OpenAI-compatible endpoint, started with `serve` | ✅ Working |
 | Offline fallback that prints engine facts when no model is running | ✅ Working |
-| Prototype tested and debugged on real games | 🟡 Next (Phase 1) |
+| Prototype tested and debugged on real games | ✅ Working (v1) |
 | Second engine (Lc0) for positional judgement | ⬜ Planned (Phase 2) |
 | Hardware-profile switching between workstation and laptop | 🟡 Partial — engine path and model endpoint are configurable; Lc0 backend selection is not built |
 

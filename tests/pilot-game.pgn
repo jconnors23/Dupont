@@ -1,0 +1,61 @@
+Copied from the Chess.com share dialog. Braces, clocks, and the start prefix are not a clean score.
+
+start [Event "Hoogovens"]
+[Site "Chess.com"]
+[Date "1999.01.20"]
+[Round "4"]
+[White "Garry Kasparov"]
+[Black "Veselin Topalov"]
+[Result "1-0"]
+[TimeControl "7200"]
+[WhiteElo "2812"]
+[BlackElo "2700"]
+[Termination "Topalov resigned"]
+[ECO "B07"]
+[Link "https://www.chess.com/game/live/19990120?username=kasparov&move=0"]
+
+1. e4 {[%clk 1:59:40][%timestamp 20]} (1. d4 Nf6 2. c4 g6 3. Nc3 Bg7) 1... d6
+{[%clk 1:59:12][%timestamp 48]} 2. d4 {[%clk 1:58:55][%timestamp 17]} 2... Nf6
+{[%clk 1:58:20][%timestamp 52]} 3. Nc3 {[%clk 1:58:01][%timestamp 19]} 3... g6
+{[%clk 1:57:33][%timestamp 47]} 4. Be3 {[%clk 1:57:10][%timestamp 23]} 4... Bg7
+{[%clk 1:56:48][%timestamp 45]} 5. Qd2 {[%clk 1:56:11][%timestamp 37]} 5... c6
+{[%clk 1:55:40][%timestamp 68]} 6. f3 {[%clk 1:55:02][%timestamp 38]} 6... b5
+{[%clk 1:54:22][%timestamp 78]} 7. Nge2 {[%clk 1:53:40][%timestamp 42]} 7... Nbd7
+{[%clk 1:52:55][%timestamp 67]} 8. Bh6 {[%clk 1:52:10][%timestamp 45]} 8... Bxh6
+{[%clk 1:51:18][%timestamp 97]} 9. Qxh6 {[%clk 1:50:33][%timestamp 37]} 9... Bb7 $6
+{[%clk 1:49:02][%timestamp 136]} 10. a3 {[%clk 1:48:11][%timestamp 51]} 10... e5
+{[%clk 1:47:20][%timestamp 82]} 11. O-O-O {[%clk 1:46:05][%timestamp 75]} 11... Qe7
+{[%clk 1:45:11][%timestamp 69]} 12. Kb1 {[%clk 1:44:02][%timestamp 63]} 12... a6
+{[%clk 1:43:18][%timestamp 53]} 13. Nc1 {[%clk 1:42:00][%timestamp 78]} 13... O-O-O
+{[%clk 1:40:44][%timestamp 94]} 14. Nb3 {[%clk 1:39:10][%timestamp 54]} 14... exd4
+{[%clk 1:37:55][%timestamp 109]} 15. Rxd4 {[%clk 1:36:20][%timestamp 90]} 15... c5
+{[%clk 1:35:02][%timestamp 113]} 16. Rd1 {[%clk 1:33:40][%timestamp 82]} 16... Nb6
+{[%clk 1:31:18][%timestamp 224]} 17. g3 {[%clk 1:29:05][%timestamp 133]} 17... Kb8
+{[%clk 1:27:44][%timestamp 94]} 18. Na5 {[%clk 1:25:10][%timestamp 154]} 18... Ba8
+{[%clk 1:22:33][%timestamp 191]} 19. Bh3 {[%clk 1:20:02][%timestamp 151]} 19... d5
+{[%clk 1:16:40][%timestamp 233]} 20. Qf4+ $1 {[%clk 1:12:18][%timestamp
+224]} 20... Ka7 {[%clk 1:08:55][%timestamp 225]} 21. Rhe1 {[%clk 1:05:02][%timestamp
+196]} 21... d4 {[%clk 0:59:11][%timestamp 584]} 22. Nd5 {[%clk 0:52:40][%timestamp
+391]} 22... Nbxd5 {[%clk 0:46:18][%timestamp 413]} 23. exd5 {[%clk 0:44:02][%timestamp
+158]} 23... Qd6 {[%clk 0:38:55][%timestamp 443]} 24. Rxd4 $1 {[%clk 0:31:20][%timestamp
+402]} 24... cxd4 {[%clk 0:24:11][%timestamp 404]} 25. Re7+ {[%clk 0:22:05][%timestamp
+135]} 25... Kb6 {[%clk 0:16:40][%timestamp 451]} 26. Qxd4+ {[%clk 0:14:18][%timestamp
+107]} 26... Kxa5 {[%clk 0:11:02][%timestamp 338]} 27. b4+ {[%clk 0:09:44][%timestamp
+94]} 27... Ka4 {[%clk 0:07:55][%timestamp 187]} 28. Qc3 {[%clk 0:06:20][%timestamp
+84]} 28... Qxd5 {[%clk 0:05:11][%timestamp 164]} 29. Ra7 {[%clk 0:04:02][%timestamp
+78]} 29... Bb7 {[%clk 0:03:18][%timestamp 113]} 30. Rxb7 {[%clk 0:02:40][%timestamp
+82]} 30... Qc4 {[%clk 0:02:05][%timestamp 73]} 31. Qxf6 {[%clk 0:01:33][%timestamp
+67]} 31... Kxa3 {[%clk 0:01:11][%timestamp 54]} 32. Qxa6+ {[%clk 0:01:02][%timestamp
+31]} 32... Kxb4 {[%clk 0:00:48][%timestamp 23]} 33. c3+ {[%clk 0:00:40][%timestamp
+22]} 33... Kxc3 {[%clk 0:00:31][%timestamp 17]} 34. Qa1+ {[%clk 0:00:28][%timestamp
+12]} 34... Kd2 {[%clk 0:00:22][%timestamp 9]} 35. Qb2+ {[%clk 0:00:19][%timestamp
+9]} 35... Kd1 {[%clk 0:00:15][%timestamp 7]} 36. Bf1 {[%clk 0:00:12][%timestamp
+7]} 36... Rd2 {[%clk 0:00:09][%timestamp 6]} 37. Rd7 {[%clk 0:00:08][%timestamp
+4]} 37... Rxd7 {[%clk 0:00:06][%timestamp 3]} 38. Bxc4 {[%clk 0:00:05][%timestamp
+3]} 38... bxc4 {[%clk 0:00:04][%timestamp 2]} 39. Qxh8 {[%clk 0:00:04][%timestamp
+1]} 39... Rd3 {[%clk 0:00:03][%timestamp 1]} 40. Qa8 {[%clk 0:00:03][%timestamp
+1]} 40... c3 {[%clk 0:00:02][%timestamp 1]} 41. Qa4+ {[%clk 0:00:02][%timestamp
+1]} 41... Ke1 {[%clk 0:00:02][%timestamp 0]} 42. f4 {[%clk 0:00:02][%timestamp
+0]} 42... f5 {[%clk 0:00:01][%timestamp 1]} 43. Kc1 {[%clk 0:00:01][%timestamp
+1]} 43... Rd2 {[%clk 0:00:01][%timestamp 0]} 44. Qa7 {[%clk 0:00:01][%timestamp
+0]} 1-0

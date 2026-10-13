@@ -1,6 +1,7 @@
 ---
 hide:
   - toc
+icon: material/book-open-page-variant
 ---
 
 # Glossary
@@ -19,7 +20,7 @@ Plain-language definitions of the terms used across these docs — both the ches
 : The common, human-facing way moves are written. It names the piece and the destination, with symbols for captures, check, and so on: `Nf3` (knight to f3), `exd5` (pawn on the e-file captures on d5), `O-O` (kingside castling), `Qxb8+` (queen captures on b8 with check), `Rd8#` (rook to d8, checkmate). It is what you see in a PGN and in Dupont's output. Dupont accepts SAN loosely — a lowercase piece letter, a trailing `!`/`?`, or `0-0` for castling are all tolerated.
 
 **UCI (Universal Chess Interface) move notation**
-: A plainer way to write a move as just its start and end squares, like `g1f3` for the same move SAN writes as `Nf3`, or `e1g1` for kingside castling. It is unambiguous and easy for programs to parse. Dupont accepts moves in either SAN or UCI form, so `/w Nxd5` and `/w c6d5` both work. (The acronym "UCI" is also the name of the protocol a program uses to drive an engine — a separate meaning, listed under Computing Terms.)
+: A plainer way to write a move as just its start and end squares, like `g1f3` for the same move SAN writes as `Nf3`, or `e1g1` for kingside castling. It is unambiguous and easy for programs to parse. Dupont accepts moves in either SAN or UCI form when you name one in a question, so `why not Nxd5?` and `why not c6d5?` both work. (The acronym "UCI" is also the name of the protocol a program uses to drive an engine — a separate meaning, listed under Computing Terms.)
 
 **FEN (Forsyth–Edwards Notation)**
 : A single line of text that describes one exact board position. It has six space-separated fields: the piece layout rank by rank, whose turn it is (`w` or `b`), castling rights still available (like `KQkq`), the en-passant target square if any (`-` if none), and two move counters. For example, `rnbqkb1r/pppppppp/5n2/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 2 2` reads as: this exact arrangement of pieces, Black to move, both sides may still castle both ways, no en-passant square, and the two clocks.
@@ -35,10 +36,13 @@ Plain-language definitions of the terms used across these docs — both the ches
 : The line of play an engine expects to follow if both sides play its top choices. Dupont shows a few plies of the PV next to each candidate move.
 
 **Multi-PV**
-: Asking the engine for its best *several* moves at once, each with its own line, rather than just the single best. The `/eval` command uses multi-PV to show the top two.
+: Asking the engine for its best *several* moves at once, each with its own line, rather than just the single best. The `eval` command uses multi-PV to show the top two.
 
 **Refutation**
 : The reply that punishes a bad move. When you ask `why not <move>`, Dupont plays the move and has the engine find the opponent's best response, which is the refutation.
+
+**Critical decision**
+: A position where one move is clearly better than the alternative — the engine's top two lines differ by at least a pawn, or one of them forces checkmate. The `eval-critical` command scans forward for the next such position and explains it, so you can skip the quiet stretches and land on the moments that actually decide the game.
 
 ## Computing Terms
 

@@ -2,7 +2,33 @@
    dupont — chess-themed styling for the docs site.
    Board palette from the project screenshot: muted purple dark
    squares, warm cream light squares, on a dark frame.
+   Type is a large, playful Comic Sans stack.
    ============================================================ */
+
+/* Comic Neue is a free Comic Sans look-alike. We load it as a fallback so the
+   playful look holds even on machines without Comic Sans MS installed. */
+@import url("https://fonts.googleapis.com/css2?family=Comic+Neue:wght@400;700&display=swap");
+
+/* A playful handwriting-style stack: use the reader's Comic Sans MS if present,
+   fall back to Comic Neue (loaded above), then any casual system face. */
+:root {
+  --dupont-font-text: "Comic Sans MS", "Comic Neue", "Chalkboard SE", "Comic Sans", cursive;
+  --dupont-font-code: "Comic Neue", "Comic Sans MS", ui-monospace, monospace;
+}
+
+/* Apply the playful font everywhere Material uses its text and code faces. */
+:root {
+  --md-text-font: var(--dupont-font-text);
+  --md-code-font: var(--dupont-font-code);
+}
+
+body,
+.md-typeset,
+.md-header,
+.md-nav,
+.md-tabs {
+  font-family: var(--dupont-font-text);
+}
 
 :root {
   --chess-dark-square: #7a74c4;   /* purple board square */
@@ -29,47 +55,53 @@
   display: none !important;
 }
 
-/* ---- Larger, more readable text across the whole site. ---- */
+/* ---- Larger, more readable, playful text across the whole site.
+   Comic Sans runs a little small per point size, so sizes are bumped up. ---- */
 .md-typeset {
-  font-size: 0.95rem;
-  line-height: 1.75;
+  font-size: 1.02rem;
+  line-height: 1.8;
 }
 
-/* Scale the base rem up too, so spacing and all relative sizes grow with it. */
+/* Scale the base rem up, so spacing and all relative sizes grow with it. */
 @media screen and (min-width: 76.25em) {
   html {
-    font-size: 130%;
+    font-size: 138%;
   }
 }
 
 html {
-  font-size: 122%;
+  font-size: 130%;
 }
 
+/* Left navigation: larger, easy to read. */
 .md-nav {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
 }
 
-/* Headings a touch larger than the scaled defaults. */
+/* Headings larger and bolder for a friendly, chunky feel. */
 .md-typeset h1 {
-  font-size: 2.1rem;
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
 }
 
 .md-typeset h2 {
-  font-size: 1.55rem;
+  font-size: 1.75rem;
+  font-weight: 700;
 }
 
 .md-typeset h3 {
-  font-size: 1.2rem;
+  font-size: 1.35rem;
+  font-weight: 700;
 }
 
-/* Larger table and code text. */
+/* Readable table and code text. */
 .md-typeset table:not([class]) {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 
 .md-typeset code {
-  font-size: 0.86em;
+  font-size: 0.9em;
 }
 
 /* ---- Header: a thin board-pattern strip under the top bar, so the
@@ -153,4 +185,92 @@ html {
 /* ---- Admonitions picked up the accent too. ---- */
 .md-typeset .admonition {
   border-left-color: var(--chess-accent);
+}
+
+/* ============================================================
+   Chess theming — pieces and board motifs across the whole site,
+   so it reads as "chess" everywhere, not just the logo.
+   ============================================================ */
+
+/* ---- A chess piece in front of every section heading (H2).
+   The pieces cycle down the page: ♟ ♞ ♝ ♜ ♛ ♚, then repeat. ---- */
+.md-typeset h2 {
+  position: relative;
+}
+
+.md-typeset h2::before {
+  margin-right: 0.5rem;
+  color: var(--chess-accent-soft);
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+.md-typeset h2:nth-of-type(6n + 1)::before { content: "\265F"; }  /* pawn */
+.md-typeset h2:nth-of-type(6n + 2)::before { content: "\265E"; }  /* knight */
+.md-typeset h2:nth-of-type(6n + 3)::before { content: "\265D"; }  /* bishop */
+.md-typeset h2:nth-of-type(6n + 4)::before { content: "\265C"; }  /* rook */
+.md-typeset h2:nth-of-type(6n + 5)::before { content: "\265B"; }  /* queen */
+.md-typeset h2:nth-of-type(6n + 6)::before { content: "\265A"; }  /* king */
+
+/* ---- Chess-pawn bullets for unordered lists. ---- */
+.md-typeset ul li::marker {
+  content: "\265F  ";
+  color: var(--chess-accent);
+}
+
+/* ---- Left-nav section labels: a small knight before each group,
+   so the three sections (Start Here / Under The Hood / Reference)
+   read as chess-themed headers. ---- */
+.md-nav__item--section > .md-nav__link,
+.md-nav__title {
+  color: var(--chess-accent-soft);
+}
+
+.md-nav__item--section > .md-nav__link::before {
+  content: "\265E  ";
+  color: var(--chess-accent);
+}
+
+/* ---- Page icons (from each page's front-matter `icon:`) get the
+   accent color where Material renders them in the title. ---- */
+.md-typeset h1 .twemoji svg,
+.md-content__inner .md-icon svg {
+  fill: var(--chess-accent-soft);
+}
+
+/* ---- A board-pattern strip above the footer, mirroring the header,
+   so the page is framed top and bottom like a board edge. ---- */
+.md-footer-meta {
+  position: relative;
+}
+
+.md-footer-meta::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background-image:
+    linear-gradient(45deg, var(--chess-dark-square) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--chess-dark-square) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--chess-dark-square) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--chess-dark-square) 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+  background-color: var(--chess-light-square);
+  opacity: 0.85;
+}
+
+/* ---- A decorative row of pieces under the H1 on the home page,
+   added via the title underline area for a welcoming touch. ---- */
+.md-typeset h1::after {
+  content: "\2659  \2658  \2657  \2656  \2655  \2654";
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.35rem;
+  color: var(--chess-accent);
+  opacity: 0.55;
+  border: 0;
 }

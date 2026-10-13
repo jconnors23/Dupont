@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Launch interactive terminal chess coaching session.
+# Usage:
+#   ./start                         (clipboard, or paste once this prompt is running)
+#   ./start <file.pgn>              (load PGN file)
+#   pbpaste | ./start               (pipe PGN directly from clipboard)
+# Chess.com Share → PGN contains {[%clk]} comments. Pasting that beside the word
+# start is handled by scripts/start-chess-com-paste.zsh before zsh can reject the braces.
+
+if [ $# -eq 0 ]; then
+    exec .venv/bin/python dupont/cli.py
+else
+    exec .venv/bin/python dupont/cli.py "$@"
+fi

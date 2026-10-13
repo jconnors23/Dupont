@@ -105,6 +105,18 @@ class ChessCoach:
             lines.append(f"- Moving Side: {facts['mover_color']}")
         if "best_move_san" in facts:
             lines.append(f"- Stockfish Best Move: {facts['best_move_san']}")
+        if "score_display" in facts:
+            lines.append(f"- Evaluation (White POV): {facts['score_display']}")
+        if "score_verdict" in facts:
+            lines.append(f"- Score Verdict: {facts['score_verdict']}")
+        if "material_white" in facts and "material_black" in facts:
+            lines.append(
+                f"- Material: White {facts['material_white']}, Black {facts['material_black']}"
+            )
+        if "options" in facts and facts["options"]:
+            lines.append(f"- Options For The Side To Move: {facts['options']}")
+        if "continuation" in facts and facts["continuation"]:
+            lines.append(f"- Engine Continuation: {facts['continuation']}")
         if "best_eval_white" in facts:
             lines.append(f"- Best Move Eval (White POV): {facts['best_eval_white']}")
         if "after_eval_white" in facts:
@@ -204,7 +216,18 @@ class ChessCoach:
             "",
         ]
 
-        if "candidate_san" in facts:
+        if "score_verdict" in facts and "candidate_san" not in facts:
+            lines.append(f"### Eval score: `{facts.get('score_display', '0.00')}`")
+            lines.append(f"- **Verdict:** {facts['score_verdict']}")
+            if "material_white" in facts and "material_black" in facts:
+                lines.append(
+                    f"- **Material:** White {facts['material_white']}, Black {facts['material_black']}"
+                )
+            if facts.get("options"):
+                lines.append(f"- **Options:** {facts['options']}")
+            if facts.get("continuation"):
+                lines.append(f"- **Continuation:** `{facts['continuation']}`")
+        elif "candidate_san" in facts:
             lines.append(
                 f"### Analysis for Move: **{facts['candidate_san']}** ({facts.get('classification', 'Evaluated')})"
             )

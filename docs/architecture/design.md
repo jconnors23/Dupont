@@ -1,6 +1,7 @@
 ---
 hide:
   - toc
+icon: material/chess-queen
 ---
 
 # Architecture Design: Dual-Engine Evaluation
@@ -25,27 +26,17 @@ The difference comes from how each engine works. Stockfish searches many moves d
 Both engines sit behind one evaluation layer. The coach receives a single combined block of facts and does not need to know which engine produced any given number.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':65,'rankSpacing':75,'padding':14}}}%%
-flowchart TB
-    POS[Current position] --> SF[Stockfish:<br/>tactical calculation]
-    POS --> LC[Lc0:<br/>positional judgement<br/>PLANNED]
-    SF -->|centipawn scores,<br/>best move, lines,<br/>refutations| COMB[Combined engine facts]
-    LC -->|positional eval,<br/>compensation,<br/>structure notes| COMB
-    COMB --> COACH[LLM coach]
-    Q[Your question] --> COACH
-    COACH --> OUT[Plain-language answer]
-
-    classDef impl fill:#7a74c4,stroke:#b4afe8,color:#f6f6fb,font-size:18px;
-    classDef planned fill:#2d2846,stroke:#b4afe8,color:#eceaf6,stroke-dasharray:6 4,font-size:18px;
-    classDef think fill:#453d6b,stroke:#b4afe8,color:#eceaf6,font-size:18px;
-    classDef io fill:#8b84e4,stroke:#15131f,color:#15131f,font-size:18px;
-    class SF impl;
-    class LC planned;
-    class COMB,COACH think;
-    class POS,Q,OUT io;
+%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':50,'rankSpacing':60}}}%%
+flowchart LR
+    POS([Current position]) --> SF[Stockfish:<br/>tactics and scores]
+    POS --> LC[Lc0: positional<br/>judgement &#40;planned&#41;]
+    SF --> COMB[One set of<br/>engine facts]
+    LC --> COMB
+    COMB --> COACH[Model puts it<br/>into plain English]
+    COACH --> OUT([You read it])
 ```
 
-In the diagram, the solid Stockfish box is implemented today; the dashed Lc0 box is planned. When Lc0 is absent — on hardware without a usable neural backend, or in the current code — the layer produces Stockfish-only facts and the coach works exactly as it does now.
+Today only the Stockfish path exists; the Lc0 path is planned. When Lc0 is absent — on hardware without a usable neural backend, or in the current code — the facts are Stockfish-only and the coach works exactly as it does now.
 
 ## What Each Engine Contributes To The Facts
 
@@ -94,16 +85,11 @@ The product is local-first: it is built to run offline with no per-request cost.
 The same program is meant to run under either profile without code changes. The engine paths and the model endpoint are read from the environment (see `dupont/config.py` and the `.env` file), so moving between the workstation and the laptop is a matter of configuration. This environment-driven selection is implemented today for Stockfish and the model endpoint; the Lc0 backend selection is part of the planned work.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':65,'rankSpacing':80,'padding':16}}}%%
+%%{init: {'theme':'base','themeVariables':{'fontSize':'20px','primaryColor':'#7a74c4','primaryTextColor':'#f6f6fb','primaryBorderColor':'#b4afe8','lineColor':'#b4afe8'},'flowchart':{'nodeSpacing':60,'rankSpacing':70}}}%%
 flowchart TB
-    ENV[Environment / .env settings] --> D{Which profile?}
-    D -->|Workstation| A[Stockfish on CPU<br/>+ Lc0 on RTX 5070 Ti<br/>+ local vLLM or Ollama]
-    D -->|MacBook Pro| B[Stockfish NEON<br/>+ Lc0 off or Metal<br/>+ Ollama/llama.cpp<br/>or remote fallback]
-
-    classDef io fill:#8b84e4,stroke:#15131f,color:#15131f,font-size:18px;
-    classDef dec fill:#7a74c4,stroke:#b4afe8,color:#f6f6fb,font-size:18px;
-    class ENV,A,B io;
-    class D dec;
+    ENV([Your .env settings]) --> D{Which machine?}
+    D -->|Workstation| A[Stockfish on CPU,<br/>Lc0 on the GPU,<br/>local model server]
+    D -->|MacBook Pro| B[Stockfish on CPU,<br/>Lc0 off by default,<br/>local or remote model]
 ```
 
 ## What This Design Does Not Change
