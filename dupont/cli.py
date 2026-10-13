@@ -1238,6 +1238,7 @@ class ChessCLIApp:
 
         try:
             while True:
+                console.print("[bold cyan]Ask about this position[/bold cyan]")
                 try:
                     action, text = read_user_action("> ")
                 except (EOFError, KeyboardInterrupt):
